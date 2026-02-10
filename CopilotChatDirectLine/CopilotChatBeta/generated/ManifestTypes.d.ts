@@ -14,6 +14,7 @@ export interface IInputs {
     ModalTitle: ComponentFramework.PropertyTypes.StringProperty;
     EnableAttachments: ComponentFramework.PropertyTypes.TwoOptionsProperty;
     AttachmentIcon: ComponentFramework.PropertyTypes.StringProperty;
+    DefaultLanguage: ComponentFramework.PropertyTypes.StringProperty;
 }
 export interface IOutputs {
     Version?: string;

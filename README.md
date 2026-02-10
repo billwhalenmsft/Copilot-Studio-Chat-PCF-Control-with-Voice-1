@@ -11,11 +11,13 @@ A Power Apps Component Framework (PCF) control that enables rich chat experience
 
 - ✅ **Modern Chat UI** - Clean, responsive chat interface built with Fluent Design
 - ✅ **Voice Input** - Speech-to-text using browser Web Speech API or Azure Speech Services
-- ✅ **Voice Output** - Text-to-speech with Azure Neural Voices or browser fallback
+- ✅ **Voice Output** - Text-to-speech with Azure Neural Voices or OpenAI TTS
 - ✅ **Adaptive Cards** - Support for rich interactive cards from Copilot Studio
 - ✅ **Mobile Support** - Works on iOS, Android, and desktop browsers
 - ✅ **Direct Line Integration** - Connects to Copilot Studio via Direct Line API
 - ✅ **Driving Mode** - Hands-free operation for field workers (Beta)
+- ✅ **Multi-Language Support** - 34 languages with native Azure Neural voices (Beta)
+- ✅ **Admin/Debug Mode** - In-app debug logging panel for troubleshooting (Beta)
 
 ## Screenshots
 
@@ -90,7 +92,30 @@ For premium neural voices instead of browser voices:
    - **SpeechKey**: Your Speech Service key
    - **SpeechRegion**: Your region code (e.g., `eastus`)
 
-### Available Voice Profiles
+## Azure OpenAI TTS (Optional)
+
+For natural-sounding OpenAI voices (English only):
+
+1. Create an Azure OpenAI resource with TTS model deployed
+2. Configure the control properties:
+   - **OpenAIEndpoint**: Your Azure OpenAI endpoint URL
+   - **OpenAIKey**: Your Azure OpenAI API key
+   - **OpenAIDeployment**: Deployment name (default: `tts`)
+
+### Available Voice Profiles (English)
+
+#### OpenAI TTS Voices (Natural)
+
+| Profile | Voice | Style | Best For |
+|---------|-------|-------|----------|
+| `openai-echo` | Echo | Warm, conversational | Default - friendly interactions |
+| `openai-alloy` | Alloy | Neutral, balanced | General purpose |
+| `openai-fable` | Fable | Expressive, narrative | Storytelling |
+| `openai-onyx` | Onyx | Deep, authoritative | Professional settings |
+| `openai-nova` | Nova | Warm, friendly | Customer service |
+| `openai-shimmer` | Shimmer | Clear, optimistic | Upbeat interactions |
+
+#### Azure Neural Voices
 
 | Profile | Voice | Style | Best For |
 |---------|-------|-------|----------|
@@ -101,6 +126,79 @@ For premium neural voices instead of browser voices:
 | `guy-friendly` | Guy | Friendly | Male voice option |
 | `davis-chat` | Davis | Chat | Casual conversations |
 | `sara-friendly` | Sara | Friendly | Alternative female voice |
+
+## Multi-Language Support (Beta)
+
+The Beta control supports 34 languages for both speech recognition and text-to-speech. Users can select their preferred language from the Settings panel.
+
+### Supported Languages
+
+| Region | Languages |
+|--------|-----------|
+| **Americas** | English (US, CA), Spanish (CO, MX, AR, CL, PE, US), Portuguese (BR), French (CA) |
+| **Europe** | English (UK), Spanish (ES), French (FR), German, Italian, Portuguese (PT), Dutch, Polish, Swedish, Norwegian, Danish, Finnish, Russian, Ukrainian, Czech, Greek |
+| **Asia** | Chinese (Simplified, Traditional, HK), Japanese, Korean, Hindi, Thai, Vietnamese, Indonesian, Malay, Filipino |
+| **Middle East** | Arabic (SA, EG, AE), Hebrew, Turkish |
+| **Africa** | Afrikaans, Swahili |
+
+### Language Selection Priority
+
+1. **User's saved preference** - Persisted in localStorage from Settings
+2. **Admin-configured default** - Set via `DefaultLanguage` property
+3. **Browser auto-detection** - Falls back to browser locale
+
+### Configuration
+
+Set a default language via the control property:
+- **DefaultLanguage**: BCP-47 language code (e.g., `en-US`, `es-MX`, `fr-FR`)
+
+## Admin/Debug Mode (Beta)
+
+The Beta control includes an Admin Mode toggle that enables a debug logging panel for troubleshooting.
+
+### Features
+
+- 🐛 **Debug Panel** - Full-screen overlay showing timestamped log entries
+- 📋 **Log Categories** - Filter by level (info, warn, error, debug) or category (speech, audio, console)
+- 📧 **Email Logs** - One-click export to email for support escalation
+- 📋 **Copy to Clipboard** - Export formatted logs for pasting
+- 🔄 **Auto-capture** - Intercepts all console.log/warn/error calls
+- 💾 **Persistent** - Stores up to 500 log entries
+
+### Enabling Admin Mode
+
+**Option 1: Settings Panel (User Toggle)**
+1. Open the Settings panel (⚙️ button)
+2. Scroll to the bottom
+3. Toggle **🛠️ Admin Mode** on
+4. A debug button (🐛) appears in the toolbar
+
+**Option 2: Admin Property (Pre-configured)**
+- Set `EnableDebugLog` property to `Yes` in the control configuration
+
+### Security Note
+
+The debug panel can capture sensitive information. Use only for development/troubleshooting.
+
+## Security Best Practices
+
+### Sensitive Properties
+
+The following control properties contain sensitive credentials that are visible in the Power Apps maker portal:
+
+| Property | Description |
+|----------|-------------|
+| `DirectLineSecret` | Direct Line Secret from Copilot Studio |
+| `SpeechKey` | Azure Speech Service subscription key |
+| `OpenAIKey` | Azure OpenAI API key |
+
+### Recommendations for Production
+
+1. **Environment Variables** - Store secrets as Power Platform Environment Variables, optionally linked to Azure Key Vault
+2. **Dataverse Secure Columns** - Store secrets in Dataverse columns with column-level security
+3. **Role-Based Access** - Limit maker portal access to authorized administrators only
+
+> ⚠️ Property descriptions now include 🔐 SENSITIVE warnings to remind administrators.
 
 ## Project Structure
 

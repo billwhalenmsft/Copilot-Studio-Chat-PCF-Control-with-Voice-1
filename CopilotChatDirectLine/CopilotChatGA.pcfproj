@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -15,6 +15,9 @@ export interface ChatSettings {
     voiceProfile: string;
     audioUnlocked: boolean;
     thinkingSoundEnabled: boolean;
+    // Multi-lingual settings
+    language: string;       // BCP-47 language code (e.g., 'en-US', 'es-CO')
+    voiceId: string;        // Azure Neural voice ID (e.g., 'es-CO-SalomeNeural')
 }
 
 // Stored message interface (with serialized dates)
@@ -41,7 +44,10 @@ const DEFAULT_SETTINGS: ChatSettings = {
     isMuted: false,
     voiceProfile: 'openai-echo', // Default to OpenAI Echo - Warm, conversational
     audioUnlocked: false,
-    thinkingSoundEnabled: true // Default to ON
+    thinkingSoundEnabled: true, // Default to ON
+    // Multi-lingual defaults (empty means auto-detect)
+    language: '',              // Will auto-detect from browser
+    voiceId: '',               // Will use default voice for language
 };
 
 // Conversation expiration time (30 minutes) - DirectLine tokens typically last longer,

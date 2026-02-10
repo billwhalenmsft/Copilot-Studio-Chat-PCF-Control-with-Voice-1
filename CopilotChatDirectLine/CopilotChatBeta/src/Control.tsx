@@ -28,6 +28,9 @@ export interface ControlProps {
     ModalTitle?: PropertyValue<string>;
     EnableAttachments?: PropertyValue<boolean>;
     AttachmentIcon?: PropertyValue<string>;
+    DefaultLanguage?: PropertyValue<string>;
+    EnableDebugLog?: PropertyValue<boolean>;
+    DebugLogEmail?: PropertyValue<string>;
 }
 
 const ChatDirectLineControl: React.FC<ControlProps> = (props) => {
@@ -141,6 +144,9 @@ const ChatDirectLineControl: React.FC<ControlProps> = (props) => {
             modalTitle={props.ModalTitle?.raw || undefined}
             enableAttachments={props.EnableAttachments?.raw === true}
             attachmentIcon={(props.AttachmentIcon?.raw as 'paperclip' | 'camera' | 'document' | 'plus') || 'paperclip'}
+            defaultLanguage={props.DefaultLanguage?.raw || undefined}
+            enableDebugLog={props.EnableDebugLog?.raw === true}
+            debugLogEmail={props.DebugLogEmail?.raw || undefined}
         />
     );
 };

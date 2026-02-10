@@ -11,6 +11,7 @@ import { useAttachments, Attachment } from './useAttachments';
 import AttachmentPreview from './AttachmentPreview';
 import AdaptiveCardRenderer, { CardAction } from './AdaptiveCardRenderer';
 import DrivingModeModal from './DrivingModeModal';
+import useDebugLog, { DebugPanel } from './useDebugLog';
 import {
     saveSettings,
     loadSettings,
@@ -21,12 +22,24 @@ import {
     StoredMessage
 } from './utils/storage';
 import { CopilotChatService } from './services/CopilotChatService';
+import {
+    SUPPORTED_LANGUAGES,
+    getLanguageByCode,
+    getDefaultVoice,
+    getVoicesForLanguage,
+    getLanguagesByRegion,
+    detectBrowserLanguage,
+    getGreeting,
+    isEnglish,
+    LanguageConfig,
+    VoiceConfig
+} from './languages';
 
 // Extend Window for speech recognition
 declare global {
     interface Window {
-        SpeechRecognition: typeof SpeechRecognition;
-        webkitSpeechRecognition: typeof SpeechRecognition;
+        SpeechRecognition: any;
+        webkitSpeechRecognition: any;
         webkitAudioContext: typeof AudioContext;
     }
 }
@@ -79,6 +92,9 @@ export interface ChatWindowProps {
     modalTitle?: string;
     enableAttachments?: boolean;
     attachmentIcon?: 'paperclip' | 'camera' | 'document' | 'plus';
+    defaultLanguage?: string;  // Admin-configured default language
+    enableDebugLog?: boolean;  // Enable in-app debug logging
+    debugLogEmail?: string;    // Email address to send debug logs
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -91,10 +107,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     isReconnected = false,
     modalTitle,
     enableAttachments = false,
-    attachmentIcon = 'paperclip'
+    attachmentIcon = 'paperclip',
+    defaultLanguage,
+    enableDebugLog = false,
+    debugLogEmail
 }) => {
     // Load saved settings on initialization
     const savedSettings = React.useMemo(() => loadSettings(), []);
+
+    // Determine initial language: saved > admin default > browser detection
+    const initialLanguage = React.useMemo(() => {
+        if (savedSettings.language) return savedSettings.language;
+        if (defaultLanguage && getLanguageByCode(defaultLanguage)) return defaultLanguage;
+        return detectBrowserLanguage();
+    }, [defaultLanguage, savedSettings.language]);
+
+    // Determine initial voice: saved > default for language
+    const initialVoiceId = React.useMemo(() => {
+        if (savedSettings.voiceId) return savedSettings.voiceId;
+        const defaultVoice = getDefaultVoice(initialLanguage);
+        return defaultVoice?.id || '';
+    }, [initialLanguage, savedSettings.voiceId]);
 
     // Load saved messages if reconnected
     const savedMessages = React.useMemo(() => {
@@ -122,8 +155,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const [lastUserInput, setLastUserInput] = React.useState('');
     const [lastBotResponse, setLastBotResponse] = React.useState('');
     const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
+    
+    // Multi-lingual state
+    const [selectedLanguage, setSelectedLanguage] = React.useState(initialLanguage);
+    const [selectedVoiceId, setSelectedVoiceId] = React.useState(initialVoiceId);
 
-    const recognitionRef = React.useRef<SpeechRecognition | null>(null);
+    // Debug logging state
+    const [showDebugPanel, setShowDebugPanel] = React.useState(false);
+    const debugLog = useDebugLog({
+        enabled: enableDebugLog,
+        emailAddress: debugLogEmail,
+        maxEntries: 500
+    });
+
+    const recognitionRef = React.useRef<any>(null);
     const autoSendTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const audioMenuRef = React.useRef<HTMLDivElement>(null);
@@ -152,7 +197,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         openAIKey,
         openAIDeployment,
         voiceProfile,
-        audioUnlocked
+        audioUnlocked,
+        language: selectedLanguage,
+        voiceId: selectedVoiceId
     });
 
     // Use a ref for speak to avoid effect re-runs when speak function changes
@@ -203,9 +250,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             isMuted,
             voiceProfile,
             audioUnlocked,
-            thinkingSoundEnabled
+            thinkingSoundEnabled,
+            language: selectedLanguage,
+            voiceId: selectedVoiceId
         });
-    }, [isMuted, voiceProfile, audioUnlocked, thinkingSoundEnabled]);
+    }, [isMuted, voiceProfile, audioUnlocked, thinkingSoundEnabled, selectedLanguage, selectedVoiceId]);
 
     // Save messages when they change
     React.useEffect(() => {
@@ -228,6 +277,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             }, 500);
             return () => clearTimeout(timer);
         }
+        return undefined;
     }, []);
 
     // Force-stop mic when bot starts speaking
@@ -265,6 +315,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             }, 500);
             return () => clearTimeout(startTimer);
         }
+        return undefined;
     }, [drivingMode, isListening, isPlaying, isSending, isTyping]);
 
     // Trigger Conversation Start on mount
@@ -485,10 +536,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             recognitionRef.current = new SpeechRecognition();
             recognitionRef.current.continuous = false;
             recognitionRef.current.interimResults = drivingMode;
-            recognitionRef.current.lang = 'en-US';
+            recognitionRef.current.lang = selectedLanguage; // Use selected language for speech recognition
             recognitionRef.current.maxAlternatives = 1;
 
-            recognitionRef.current.onresult = (event) => {
+            recognitionRef.current.onresult = (event: any) => {
                 const transcript = event.results[0][0].transcript;
                 const isFinal = event.results[0].isFinal;
                 const confidence = event.results[0][0].confidence;
@@ -549,7 +600,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 }
             };
 
-            recognitionRef.current.onerror = (event) => {
+            recognitionRef.current.onerror = (event: any) => {
                 console.error('Speech recognition error:', event.error);
                 setIsListening(false);
                 setTranscribedText('');
@@ -571,7 +622,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 clearTimeout(autoSendTimerRef.current);
             }
         };
-    }, [drivingMode]);
+    }, [drivingMode, selectedLanguage]);  // Re-initialize when language changes
 
     const sendMessage = async (text: string, withAttachments: boolean = false): Promise<void> => {
         if ((!text.trim() && !withAttachments) || isSending) return;
@@ -1344,6 +1395,48 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     ⚙️
                 </button>
 
+                {/* Debug Log Button - only shown when debug is enabled */}
+                {enableDebugLog && (
+                    <button
+                        onClick={() => setShowDebugPanel(true)}
+                        style={{
+                            padding: '10px 12px',
+                            backgroundColor: '#f3f2f1',
+                            color: '#605e5c',
+                            border: '1px solid #8a8886',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '18px',
+                            minWidth: '44px',
+                            height: '44px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative'
+                        }}
+                        title="Debug Logs"
+                    >
+                        🐛
+                        {debugLog.logs.length > 0 && (
+                            <span style={{
+                                position: 'absolute',
+                                top: '-5px',
+                                right: '-5px',
+                                backgroundColor: '#d13438',
+                                color: '#fff',
+                                borderRadius: '10px',
+                                padding: '2px 6px',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                minWidth: '18px',
+                                textAlign: 'center'
+                            }}>
+                                {debugLog.logs.length > 99 ? '99+' : debugLog.logs.length}
+                            </span>
+                        )}
+                    </button>
+                )}
+
                 {/* Attachment Button */}
                 {enableAttachments && (
                     <>
@@ -1511,7 +1604,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             </span>
                         </div>
 
-                        {/* Voice Profile */}
+                        {/* Language Selection */}
                         <div style={{ marginBottom: '20px' }}>
                             <label
                                 style={{
@@ -1522,9 +1615,67 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                                     color: '#323130'
                                 }}
                             >
-                                🎤 Voice Profile
+                                🌍 Language
                             </label>
-                            {availableVoices.length === 0 ? (
+                            <select
+                                value={selectedLanguage}
+                                onChange={e => {
+                                    const newLang = e.target.value;
+                                    setSelectedLanguage(newLang);
+                                    // Auto-select default voice for new language
+                                    const defaultVoice = getDefaultVoice(newLang);
+                                    if (defaultVoice) {
+                                        setSelectedVoiceId(defaultVoice.id);
+                                    }
+                                    // Reset voice profile to Azure if switching to non-English
+                                    if (!isEnglish(newLang)) {
+                                        setVoiceProfile('azure-jenny-friendly');
+                                    }
+                                }}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    fontSize: '14px',
+                                    border: '1px solid #8a8886',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#fff'
+                                }}
+                            >
+                                {Object.entries(getLanguagesByRegion()).map(([region, languages]) => (
+                                    <optgroup key={region} label={region}>
+                                        {languages.map(lang => (
+                                            <option key={lang.code} value={lang.code}>
+                                                {lang.flag} {lang.name} ({lang.nativeName})
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                            <div
+                                style={{
+                                    fontSize: '11px',
+                                    color: '#605e5c',
+                                    marginTop: '6px'
+                                }}
+                            >
+                                Used for speech recognition and text-to-speech
+                            </div>
+                        </div>
+
+                        {/* Voice Selection */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label
+                                style={{
+                                    display: 'block',
+                                    marginBottom: '8px',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#323130'
+                                }}
+                            >
+                                🎤 Voice
+                            </label>
+                            {!hasAzureSpeech && !hasOpenAI ? (
                                 <div
                                     style={{
                                         padding: '12px',
@@ -1534,26 +1685,54 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                                         color: '#8a6d3b'
                                     }}
                                 >
-                                    ⚠️ No voice services configured. Contact your admin to enable Azure Speech or
-                                    OpenAI TTS.
+                                    ⚠️ No voice services configured. Contact your admin to enable Azure Speech.
                                 </div>
                             ) : (
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <select
-                                        value={voiceProfile}
-                                        onChange={e => setVoiceProfile(e.target.value)}
-                                        style={{
-                                            flex: 1,
-                                            padding: '10px',
-                                            fontSize: '14px',
-                                            border: '1px solid #8a8886',
-                                            borderRadius: '4px',
-                                            backgroundColor: '#fff'
-                                        }}
-                                    >
-                                        {hasOpenAI &&
-                                            availableVoices.filter(v => v.provider === 'openai').length > 0 && (
-                                                <optgroup label="🤖 OpenAI GPT-4o (Natural)">
+                                    {/* For non-English, show Azure voices for that language */}
+                                    {!isEnglish(selectedLanguage) ? (
+                                        <select
+                                            value={selectedVoiceId}
+                                            onChange={e => setSelectedVoiceId(e.target.value)}
+                                            style={{
+                                                flex: 1,
+                                                padding: '10px',
+                                                fontSize: '14px',
+                                                border: '1px solid #8a8886',
+                                                borderRadius: '4px',
+                                                backgroundColor: '#fff'
+                                            }}
+                                            disabled={!hasAzureSpeech}
+                                        >
+                                            {getVoicesForLanguage(selectedLanguage).map(voice => (
+                                                <option key={voice.id} value={voice.id}>
+                                                    {voice.displayName} ({voice.gender === 'female' ? '♀' : '♂'})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        /* For English, show both OpenAI and Azure options */
+                                        <select
+                                            value={voiceProfile}
+                                            onChange={e => {
+                                                setVoiceProfile(e.target.value);
+                                                // Also update voiceId for Azure voices
+                                                const profile = VOICE_PROFILES[e.target.value];
+                                                if (profile?.provider === 'azure') {
+                                                    setSelectedVoiceId(profile.voice);
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '10px',
+                                                fontSize: '14px',
+                                                border: '1px solid #8a8886',
+                                                borderRadius: '4px',
+                                                backgroundColor: '#fff'
+                                            }}
+                                        >
+                                            {hasOpenAI && (
+                                                <optgroup label="🤖 OpenAI (Natural)">
                                                     {availableVoices
                                                         .filter(v => v.provider === 'openai')
                                                         .map(v => (
@@ -1563,8 +1742,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                                                         ))}
                                                 </optgroup>
                                             )}
-                                        {hasAzureSpeech &&
-                                            availableVoices.filter(v => v.provider === 'azure').length > 0 && (
+                                            {hasAzureSpeech && (
                                                 <optgroup label="🔊 Azure Speech">
                                                     {availableVoices
                                                         .filter(v => v.provider === 'azure')
@@ -1575,13 +1753,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                                                         ))}
                                                 </optgroup>
                                             )}
-                                    </select>
+                                        </select>
+                                    )}
                                     <button
                                         onClick={async () => {
                                             if (!audioUnlocked) {
                                                 await unlockAudio();
                                             }
-                                            speak("Hello, I'm your sales assistant. How can I help you today?");
+                                            // Use language-appropriate greeting
+                                            speak(getGreeting(selectedLanguage));
                                         }}
                                         style={{
                                             padding: '10px 16px',
@@ -1603,21 +1783,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                                     </button>
                                 </div>
                             )}
-                            {voiceProfile &&
-                                (VOICE_PROFILES[voiceProfile] || availableVoices.length > 0) && (
-                                    <div
-                                        style={{
-                                            fontSize: '11px',
-                                            color: '#605e5c',
-                                            marginTop: '6px'
-                                        }}
-                                    >
-                                        Using:{' '}
-                                        {VOICE_PROFILES[voiceProfile]?.provider === 'openai'
-                                            ? '🤖 OpenAI TTS'
-                                            : '🔊 Azure Speech'}
-                                    </div>
-                                )}
+                            <div
+                                style={{
+                                    fontSize: '11px',
+                                    color: '#605e5c',
+                                    marginTop: '6px'
+                                }}
+                            >
+                                {!isEnglish(selectedLanguage) 
+                                    ? '🔊 Azure Speech (recommended for non-English)'
+                                    : isEnglish(selectedLanguage) && VOICE_PROFILES[voiceProfile]?.provider === 'openai'
+                                        ? '🤖 OpenAI TTS'
+                                        : '🔊 Azure Speech'}
+                            </div>
                         </div>
 
                         {/* Audio Unlock Button */}
@@ -1777,6 +1955,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Debug Panel */}
+            {showDebugPanel && enableDebugLog && (
+                <DebugPanel
+                    logs={debugLog.logs}
+                    onClose={() => setShowDebugPanel(false)}
+                    onClear={debugLog.clearLogs}
+                    onEmail={debugLog.emailLogs}
+                    onExport={debugLog.exportLogs}
+                    emailAddress={debugLogEmail}
+                />
             )}
         </div>
     );
