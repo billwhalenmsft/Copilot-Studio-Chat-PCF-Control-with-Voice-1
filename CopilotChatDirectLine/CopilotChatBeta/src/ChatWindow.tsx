@@ -95,6 +95,7 @@ export interface ChatWindowProps {
     defaultLanguage?: string;  // Admin-configured default language
     enableDebugLog?: boolean;  // Enable debug logging panel
     debugLogEmail?: string;    // Email address for debug logs
+    authMode?: string;         // Current auth mode (Direct/Entra) for diagnostics
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -110,7 +111,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     attachmentIcon = 'paperclip',
     defaultLanguage,
     enableDebugLog = false,
-    debugLogEmail
+    debugLogEmail,
+    authMode = 'Direct'
 }) => {
     // Load saved settings on initialization
     const savedSettings = React.useMemo(() => loadSettings(), []);
@@ -182,10 +184,37 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const spokenMessageIds = React.useRef(new Set<string>());
     const isSpeakingRef = React.useRef(false);
     const cancelSpeechRef = React.useRef(false);
+    // Track intentional mic stops to prevent auto-restart cycling
+    const intentionalStopRef = React.useRef(false);
+    const lastMicStopTimeRef = React.useRef(0);
+    const micRestartCooldownMs = 1500; // Minimum time between mic restarts
 
     // Detect if running on iOS/mobile
     const isMobile = React.useMemo(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent), []);
     const isIOS = React.useMemo(() => /iPhone|iPad|iPod/i.test(navigator.userAgent), []);
+
+    // Responsive compact mode: collapse toolbar on narrow screens
+    const [isCompact, setIsCompact] = React.useState(() => window.innerWidth < 600);
+    const [showOverflowMenu, setShowOverflowMenu] = React.useState(false);
+    const overflowMenuRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        const handleResize = () => setIsCompact(window.innerWidth < 600);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Close overflow menu on outside click
+    React.useEffect(() => {
+        if (!showOverflowMenu) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+                setShowOverflowMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showOverflowMenu]);
 
     // Check which speech providers are configured
     const hasAzureSpeech = !!(speechKey && speechRegion);
@@ -290,6 +319,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     React.useEffect(() => {
         if (drivingMode && isPlaying && recognitionRef.current) {
             console.log('🎤🛑 Driving mode: isPlaying=true, force-stopping mic to prevent interruption');
+            intentionalStopRef.current = true; // Mark as intentional stop
             try {
                 recognitionRef.current.stop();
             } catch (e) {
@@ -301,14 +331,30 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 clearTimeout(autoSendTimerRef.current);
                 autoSendTimerRef.current = null;
             }
+        } else if (drivingMode && !isPlaying && !isSending && !isTyping) {
+            // Bot finished speaking, allow auto-restart
+            intentionalStopRef.current = false;
         }
-    }, [drivingMode, isPlaying]);
+    }, [drivingMode, isPlaying, isSending, isTyping]);
 
     // Auto-start listening when driving mode is enabled and not busy
     React.useEffect(() => {
         if (drivingMode && !isListening && !isPlaying && !isSending && !isTyping && recognitionRef.current) {
+            // Check if we intentionally stopped - don't auto-restart
+            if (intentionalStopRef.current) {
+                console.log('🚗 Driving mode: Mic was intentionally stopped, skipping auto-restart');
+                return undefined;
+            }
+            
+            // Check cooldown period to prevent rapid cycling
+            const timeSinceLastStop = Date.now() - lastMicStopTimeRef.current;
+            const delayNeeded = Math.max(micRestartCooldownMs - timeSinceLastStop, 500);
+            
+            console.log(`🚗 Driving mode: Will auto-restart mic in ${delayNeeded}ms`);
+            
             const startTimer = setTimeout(() => {
-                if (drivingMode && !isListening && !isPlaying && !isSending && !isTyping) {
+                // Re-check all conditions including intentional stop
+                if (drivingMode && !isListening && !isPlaying && !isSending && !isTyping && !intentionalStopRef.current) {
                     console.log('🚗 Driving mode: Auto-starting mic...');
                     try {
                         setTranscribedText('');
@@ -318,7 +364,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                         console.log('🚗 Mic already active or unavailable');
                     }
                 }
-            }, 500);
+            }, delayNeeded);
             return () => clearTimeout(startTimer);
         }
         return undefined;
@@ -482,6 +528,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             try {
                                 if (drivingMode && recognitionRef.current) {
                                     console.log('🎤🔇 Driving mode: Stopping mic while bot speaks to prevent interruption');
+                                    intentionalStopRef.current = true;
                                     try {
                                         recognitionRef.current.stop();
                                     } catch (e) {
@@ -581,6 +628,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
                         autoSendTimerRef.current = setTimeout(() => {
                             console.log('🚗 Driving mode: Auto-sending message:', transcript);
+                            intentionalStopRef.current = true; // Stop mic while sending/waiting for response
                             if (recognitionRef.current) {
                                 try {
                                     recognitionRef.current.stop();
@@ -608,11 +656,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
             recognitionRef.current.onerror = (event: any) => {
                 console.error('Speech recognition error:', event.error);
+                lastMicStopTimeRef.current = Date.now();
                 setIsListening(false);
                 setTranscribedText('');
+                // Don't auto-restart on certain errors
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    intentionalStopRef.current = true;
+                    console.log('🎤 Mic permission denied, disabling auto-restart');
+                }
             };
 
             recognitionRef.current.onend = () => {
+                console.log('🎤 Speech recognition ended');
+                lastMicStopTimeRef.current = Date.now();
                 setIsListening(false);
                 if (!drivingMode) {
                     setTranscribedText('');
@@ -727,6 +783,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
 
         if (isListening) {
+            // User manually stopped - mark as intentional in driving mode to prevent auto-restart
+            if (drivingMode) {
+                intentionalStopRef.current = true;
+            }
             recognitionRef.current.stop();
             setIsListening(false);
             setTranscribedText('');
@@ -734,6 +794,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 clearTimeout(autoSendTimerRef.current);
             }
         } else {
+            // User manually started - clear intentional stop flag
+            intentionalStopRef.current = false;
             setTranscribedText('');
             setLastUserInput('');
             recognitionRef.current.start();
@@ -746,6 +808,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             alert('Speech recognition not supported in this browser');
             return;
         }
+        intentionalStopRef.current = false; // Clear flag when starting driving mode
         setTranscribedText('');
         setLastUserInput('');
         recognitionRef.current.start();
@@ -1080,7 +1143,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '12px',
-                    paddingBottom: '100px'
+                    paddingBottom: isCompact ? '70px' : '100px'
                 }}
             >
                 {messages.map(msg => (
@@ -1239,11 +1302,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    padding: '16px 20px',
+                    padding: isCompact ? '8px 10px' : '16px 20px',
                     backgroundColor: '#fff',
                     borderTop: '1px solid #edebe9',
                     display: 'flex',
-                    gap: '8px',
+                    gap: isCompact ? '4px' : '8px',
                     alignItems: 'center',
                     boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
                 }}
@@ -1253,251 +1316,257 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     onClick={toggleListening}
                     disabled={isSending}
                     style={{
-                        padding: '10px 12px',
+                        padding: isCompact ? '6px 8px' : '10px 12px',
                         backgroundColor: isListening ? '#c7e0f4' : '#f3f2f1',
                         color: isListening ? '#0078d4' : '#605e5c',
                         border: isListening ? '2px solid #0078d4' : '1px solid #8a8886',
                         borderRadius: '4px',
                         cursor: isSending ? 'not-allowed' : 'pointer',
-                        fontSize: '18px',
-                        minWidth: '44px',
-                        height: '44px',
+                        fontSize: isCompact ? '16px' : '18px',
+                        minWidth: isCompact ? '36px' : '44px',
+                        height: isCompact ? '36px' : '44px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        flexShrink: 0
                     }}
                     title={isListening ? 'Listening...' : 'Voice input'}
                 >
                     🎤
                 </button>
 
-                {/* Audio Control */}
-                <div ref={audioMenuRef} style={{ position: 'relative' }}>
-                    <button
-                        onClick={toggleAudioMenu}
-                        style={{
-                            padding: '10px 12px',
-                            backgroundColor: getAudioButtonColor().bg,
-                            color: getAudioButtonColor().color,
-                            border: `1px solid ${getAudioButtonColor().border}`,
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '18px',
-                            minWidth: '44px',
-                            height: '44px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.2s ease'
-                        }}
-                        title="Audio controls"
-                    >
-                        {getAudioButtonIcon()}
-                    </button>
-                    {showAudioMenu && (
-                        <div
-                            style={{
-                                position: 'absolute',
-                                bottom: '50px',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                backgroundColor: '#fff',
-                                borderRadius: '8px',
-                                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                                border: '1px solid #edebe9',
-                                overflow: 'hidden',
-                                zIndex: 1000,
-                                minWidth: '120px'
-                            }}
-                        >
-                            {(isMuted || isPaused) && (
-                                <button
-                                    onClick={handleAudioPlay}
+                {/* === Desktop: show all buttons inline === */}
+                {!isCompact && (
+                    <>
+                        {/* Audio Control */}
+                        <div ref={audioMenuRef} style={{ position: 'relative' }}>
+                            <button
+                                onClick={toggleAudioMenu}
+                                style={{
+                                    padding: '10px 12px',
+                                    backgroundColor: getAudioButtonColor().bg,
+                                    color: getAudioButtonColor().color,
+                                    border: `1px solid ${getAudioButtonColor().border}`,
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '18px',
+                                    minWidth: '44px',
+                                    height: '44px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                title="Audio controls"
+                            >
+                                {getAudioButtonIcon()}
+                            </button>
+                            {showAudioMenu && (
+                                <div
                                     style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
+                                        position: 'absolute',
+                                        bottom: '50px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
                                         backgroundColor: '#fff',
-                                        border: 'none',
-                                        borderBottom: '1px solid #edebe9',
-                                        cursor: 'pointer',
-                                        fontSize: '14px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        color: '#107c10'
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                                        border: '1px solid #edebe9',
+                                        overflow: 'hidden',
+                                        zIndex: 1000,
+                                        minWidth: '120px'
                                     }}
-                                    onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
-                                    onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
                                 >
-                                    ▶️ Play
-                                </button>
-                            )}
-                            {!isMuted && !isPaused && (
-                                <button
-                                    onClick={handleAudioPause}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        backgroundColor: '#fff',
-                                        border: 'none',
-                                        borderBottom: '1px solid #edebe9',
-                                        cursor: 'pointer',
-                                        fontSize: '14px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        color: '#8a6d3b'
-                                    }}
-                                    onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
-                                    onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
-                                >
-                                    ⏸️ Pause
-                                </button>
-                            )}
-                            {!isMuted && (
-                                <button
-                                    onClick={handleAudioStop}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        backgroundColor: '#fff',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: '14px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        color: '#d13438'
-                                    }}
-                                    onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
-                                    onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
-                                >
-                                    ⏹️ Stop
-                                </button>
+                                    {(isMuted || isPaused) && (
+                                        <button
+                                            onClick={handleAudioPlay}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                backgroundColor: '#fff',
+                                                border: 'none',
+                                                borderBottom: '1px solid #edebe9',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                color: '#107c10'
+                                            }}
+                                            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                        >
+                                            ▶️ Play
+                                        </button>
+                                    )}
+                                    {!isMuted && !isPaused && (
+                                        <button
+                                            onClick={handleAudioPause}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                backgroundColor: '#fff',
+                                                border: 'none',
+                                                borderBottom: '1px solid #edebe9',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                color: '#8a6d3b'
+                                            }}
+                                            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                        >
+                                            ⏸️ Pause
+                                        </button>
+                                    )}
+                                    {!isMuted && (
+                                        <button
+                                            onClick={handleAudioStop}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                backgroundColor: '#fff',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                color: '#d13438'
+                                            }}
+                                            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                        >
+                                            ⏹️ Stop
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
-                    )}
-                </div>
 
-                {/* Settings Button */}
-                <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    style={{
-                        padding: '10px 12px',
-                        backgroundColor: showSettings ? '#0078d4' : '#f3f2f1',
-                        color: showSettings ? '#fff' : '#605e5c',
-                        border: showSettings ? '1px solid #0078d4' : '1px solid #8a8886',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '18px',
-                        minWidth: '44px',
-                        height: '44px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}
-                    title="Settings"
-                >
-                    ⚙️
-                </button>
-
-                {/* Debug Log Button - only shown when debug is enabled */}
-                {adminModeEnabled && (
-                    <button
-                        onClick={() => setShowDebugPanel(true)}
-                        style={{
-                            padding: '10px 12px',
-                            backgroundColor: '#f3f2f1',
-                            color: '#605e5c',
-                            border: '1px solid #8a8886',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '18px',
-                            minWidth: '44px',
-                            height: '44px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            position: 'relative'
-                        }}
-                        title="Debug Logs"
-                    >
-                        🐛
-                        {debugLog.logs.length > 0 && (
-                            <span style={{
-                                position: 'absolute',
-                                top: '-5px',
-                                right: '-5px',
-                                backgroundColor: '#d13438',
-                                color: '#fff',
-                                borderRadius: '10px',
-                                padding: '2px 6px',
-                                fontSize: '10px',
-                                fontWeight: 'bold',
-                                minWidth: '18px',
-                                textAlign: 'center'
-                            }}>
-                                {debugLog.logs.length > 99 ? '99+' : debugLog.logs.length}
-                            </span>
-                        )}
-                    </button>
-                )}
-
-                {/* Attachment Button */}
-                {enableAttachments && (
-                    <>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileSelect}
-                            accept={getAcceptString()}
-                            multiple
-                            style={{ display: 'none' }}
-                            capture="environment"
-                        />
+                        {/* Settings Button */}
                         <button
-                            onClick={openFilePicker}
-                            disabled={isSending || isProcessingAttachments}
+                            onClick={() => setShowSettings(!showSettings)}
                             style={{
                                 padding: '10px 12px',
-                                backgroundColor: hasAttachments ? '#0078d4' : '#f3f2f1',
-                                color: hasAttachments ? '#fff' : '#605e5c',
-                                border: hasAttachments ? '1px solid #0078d4' : '1px solid #8a8886',
+                                backgroundColor: showSettings ? '#0078d4' : '#f3f2f1',
+                                color: showSettings ? '#fff' : '#605e5c',
+                                border: showSettings ? '1px solid #0078d4' : '1px solid #8a8886',
                                 borderRadius: '4px',
-                                cursor: isSending || isProcessingAttachments ? 'not-allowed' : 'pointer',
+                                cursor: 'pointer',
                                 fontSize: '18px',
                                 minWidth: '44px',
                                 height: '44px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                position: 'relative'
+                                justifyContent: 'center'
                             }}
-                            title={hasAttachments ? `${attachments.length} file(s) attached` : 'Attach file or photo'}
+                            title="Settings"
                         >
-                            {isProcessingAttachments ? '⏳' : getAttachmentIconEmoji()}
-                            {hasAttachments && (
-                                <span
-                                    style={{
+                            ⚙️
+                        </button>
+
+                        {/* Debug Log Button - only shown when debug is enabled */}
+                        {adminModeEnabled && (
+                            <button
+                                onClick={() => setShowDebugPanel(true)}
+                                style={{
+                                    padding: '10px 12px',
+                                    backgroundColor: '#f3f2f1',
+                                    color: '#605e5c',
+                                    border: '1px solid #8a8886',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '18px',
+                                    minWidth: '44px',
+                                    height: '44px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    position: 'relative'
+                                }}
+                                title="Debug Logs"
+                            >
+                                🐛
+                                {debugLog.logs.length > 0 && (
+                                    <span style={{
                                         position: 'absolute',
-                                        top: '-4px',
-                                        right: '-4px',
+                                        top: '-5px',
+                                        right: '-5px',
                                         backgroundColor: '#d13438',
                                         color: '#fff',
+                                        borderRadius: '10px',
+                                        padding: '2px 6px',
                                         fontSize: '10px',
                                         fontWeight: 'bold',
-                                        borderRadius: '50%',
-                                        width: '16px',
-                                        height: '16px',
+                                        minWidth: '18px',
+                                        textAlign: 'center'
+                                    }}>
+                                        {debugLog.logs.length > 99 ? '99+' : debugLog.logs.length}
+                                    </span>
+                                )}
+                            </button>
+                        )}
+
+                        {/* Attachment Button */}
+                        {enableAttachments && (
+                            <>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileSelect}
+                                    accept={getAcceptString()}
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    capture="environment"
+                                />
+                                <button
+                                    onClick={openFilePicker}
+                                    disabled={isSending || isProcessingAttachments}
+                                    style={{
+                                        padding: '10px 12px',
+                                        backgroundColor: hasAttachments ? '#0078d4' : '#f3f2f1',
+                                        color: hasAttachments ? '#fff' : '#605e5c',
+                                        border: hasAttachments ? '1px solid #0078d4' : '1px solid #8a8886',
+                                        borderRadius: '4px',
+                                        cursor: isSending || isProcessingAttachments ? 'not-allowed' : 'pointer',
+                                        fontSize: '18px',
+                                        minWidth: '44px',
+                                        height: '44px',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center'
+                                        justifyContent: 'center',
+                                        position: 'relative'
                                     }}
+                                    title={hasAttachments ? `${attachments.length} file(s) attached` : 'Attach file or photo'}
                                 >
-                                    {attachments.length}
-                                </span>
-                            )}
-                        </button>
+                                    {isProcessingAttachments ? '⏳' : getAttachmentIconEmoji()}
+                                    {hasAttachments && (
+                                        <span
+                                            style={{
+                                                position: 'absolute',
+                                                top: '-4px',
+                                                right: '-4px',
+                                                backgroundColor: '#d13438',
+                                                color: '#fff',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold',
+                                                borderRadius: '50%',
+                                                width: '16px',
+                                                height: '16px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                        >
+                                            {attachments.length}
+                                        </span>
+                                    )}
+                                </button>
+                            </>
+                        )}
                     </>
                 )}
 
@@ -1511,7 +1580,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     disabled={isSending}
                     style={{
                         flex: 1,
-                        padding: '12px',
+                        minWidth: 0,
+                        padding: isCompact ? '8px' : '12px',
                         border: '1px solid #8a8886',
                         borderRadius: '4px',
                         fontSize: '14px',
@@ -1525,19 +1595,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     onClick={handleSendMessage}
                     disabled={isSending || (!inputText.trim() && !hasAttachments)}
                     style={{
-                        padding: '10px 12px',
+                        padding: isCompact ? '6px 8px' : '10px 12px',
                         backgroundColor:
                             isSending || (!inputText.trim() && !hasAttachments) ? '#c8c6c4' : '#0078d4',
                         color: '#fff',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: isSending || !inputText.trim() ? 'not-allowed' : 'pointer',
-                        fontSize: '18px',
-                        minWidth: '44px',
-                        height: '44px',
+                        fontSize: isCompact ? '16px' : '18px',
+                        minWidth: isCompact ? '36px' : '44px',
+                        height: isCompact ? '36px' : '44px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        flexShrink: 0
                     }}
                     title={isSending ? 'Sending...' : 'Send message'}
                 >
@@ -1561,6 +1632,192 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                         </svg>
                     )}
                 </button>
+
+                {/* === Compact: overflow "..." menu button === */}
+                {isCompact && (
+                    <div ref={overflowMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+                        <button
+                            onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+                            style={{
+                                padding: '6px 8px',
+                                backgroundColor: showOverflowMenu ? '#0078d4' : '#f3f2f1',
+                                color: showOverflowMenu ? '#fff' : '#605e5c',
+                                border: showOverflowMenu ? '1px solid #0078d4' : '1px solid #8a8886',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '16px',
+                                minWidth: '36px',
+                                height: '36px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative'
+                            }}
+                            title="More options"
+                        >
+                            ⋯
+                            {/* Show badge if attachments or debug logs are active */}
+                            {(hasAttachments || (adminModeEnabled && debugLog.logs.length > 0)) && (
+                                <span style={{
+                                    position: 'absolute',
+                                    top: '-4px',
+                                    right: '-4px',
+                                    backgroundColor: '#d13438',
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%'
+                                }} />
+                            )}
+                        </button>
+
+                        {/* Overflow popover */}
+                        {showOverflowMenu && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    bottom: '42px',
+                                    right: 0,
+                                    backgroundColor: '#fff',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                                    border: '1px solid #edebe9',
+                                    overflow: 'hidden',
+                                    zIndex: 1001,
+                                    minWidth: '180px'
+                                }}
+                            >
+                                {/* Audio Controls */}
+                                <button
+                                    onClick={() => { toggleAudioMenu(); setShowOverflowMenu(false); }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        backgroundColor: '#fff',
+                                        border: 'none',
+                                        borderBottom: '1px solid #edebe9',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        color: '#323130'
+                                    }}
+                                    onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                    onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                >
+                                    {getAudioButtonIcon()} Audio Controls
+                                </button>
+
+                                {/* Settings */}
+                                <button
+                                    onClick={() => { setShowSettings(!showSettings); setShowOverflowMenu(false); }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        backgroundColor: '#fff',
+                                        border: 'none',
+                                        borderBottom: '1px solid #edebe9',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        color: '#323130'
+                                    }}
+                                    onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                    onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                >
+                                    ⚙️ Settings
+                                </button>
+
+                                {/* Debug Logs - only if admin mode */}
+                                {adminModeEnabled && (
+                                    <button
+                                        onClick={() => { setShowDebugPanel(true); setShowOverflowMenu(false); }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px 16px',
+                                            backgroundColor: '#fff',
+                                            border: 'none',
+                                            borderBottom: enableAttachments ? '1px solid #edebe9' : 'none',
+                                            cursor: 'pointer',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            color: '#323130'
+                                        }}
+                                        onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                        onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                    >
+                                        🐛 Debug Logs
+                                        {debugLog.logs.length > 0 && (
+                                            <span style={{
+                                                backgroundColor: '#d13438',
+                                                color: '#fff',
+                                                borderRadius: '10px',
+                                                padding: '1px 6px',
+                                                fontSize: '11px',
+                                                fontWeight: 'bold',
+                                                marginLeft: 'auto'
+                                            }}>
+                                                {debugLog.logs.length > 99 ? '99+' : debugLog.logs.length}
+                                            </span>
+                                        )}
+                                    </button>
+                                )}
+
+                                {/* Attachments */}
+                                {enableAttachments && (
+                                    <>
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={handleFileSelect}
+                                            accept={getAcceptString()}
+                                            multiple
+                                            style={{ display: 'none' }}
+                                            capture="environment"
+                                        />
+                                        <button
+                                            onClick={() => { openFilePicker(); setShowOverflowMenu(false); }}
+                                            disabled={isSending || isProcessingAttachments}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                backgroundColor: '#fff',
+                                                border: 'none',
+                                                cursor: isSending || isProcessingAttachments ? 'not-allowed' : 'pointer',
+                                                fontSize: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                color: '#323130'
+                                            }}
+                                            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#f3f2f1')}
+                                            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                                        >
+                                            {isProcessingAttachments ? '⏳' : getAttachmentIconEmoji()} Attach File
+                                            {hasAttachments && (
+                                                <span style={{
+                                                    backgroundColor: '#0078d4',
+                                                    color: '#fff',
+                                                    borderRadius: '10px',
+                                                    padding: '1px 6px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 'bold',
+                                                    marginLeft: 'auto'
+                                                }}>
+                                                    {attachments.length}
+                                                </span>
+                                            )}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Settings Panel */}
@@ -1568,7 +1825,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div
                     style={{
                         position: 'absolute',
-                        bottom: '70px',
+                        bottom: isCompact ? '54px' : '70px',
                         left: 0,
                         right: 0,
                         backgroundColor: '#fff',
@@ -1606,7 +1863,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                                     fontWeight: '400'
                                 }}
                             >
-                                v1.3.5 Beta
+                                v1.5.7 Beta | {authMode === 'Entra' ? '🔐 Entra' : '🔑 Direct'}
                             </span>
                         </div>
 

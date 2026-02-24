@@ -1,0 +1,21 @@
+{
+  "_comment": "Copy this file to test-config.local.json and fill in your values. The local file is gitignored.",
+  "AuthMode": "Direct",
+  "DirectLineSecret": "YOUR_DIRECT_LINE_SECRET",
+  "DirectLineEndpoint": "https://directline.botframework.com/v3/directline",
+  "EntraClientId": "YOUR_ENTRA_APP_CLIENT_ID",
+  "EntraTenantId": "YOUR_ENTRA_TENANT_ID",
+  "EntraScope": "",
+  "BotId": "YOUR_COPILOT_BOT_ID",
+  "SpeechKey": "YOUR_AZURE_SPEECH_KEY",
+  "SpeechRegion": "eastus",
+  "OpenAIEndpoint": "https://your-resource.openai.azure.com/",
+  "OpenAIKey": "YOUR_AZURE_OPENAI_KEY",
+  "OpenAIDeployment": "tts",
+  "ModalTitle": "Copilot Assistant",
+  "EnableAttachments": "false",
+  "AttachmentIcon": "paperclip",
+  "DefaultLanguage": "",
+  "EnableDebugLog": "false",
+  "DebugLogEmail": ""
+}

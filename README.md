@@ -76,11 +76,26 @@ pac pcf push --publisher-prefix YOUR_PREFIX
 3. Go to **Insert** > **Get more components** > **Code components**
 4. Select **Copilot Studio Chat** control
 5. Add control to your screen
-6. Configure properties:
+6. **Important: Set layout properties** (see below)
+7. Configure properties:
    - **DirectLineSecret**: Your Direct Line secret
    - **DirectLineEndpoint**: Leave default (`https://directline.botframework.com/v3/directline`)
 
-For detailed setup instructions, see the [Setup Guide](SETUP_GUIDE.md).
+### 📐 Recommended Layout Settings
+
+For optimal display, configure these layout properties on the control:
+
+| Property | Setting |
+|----------|---------|
+| **Flexible height** | ✅ On |
+| **Align in container** | Custom → **Stretch** |
+
+This ensures the chat control:
+- Fills its container properly
+- Responds to dynamic content height (messages, cards)
+- Works correctly in responsive layouts
+
+For detailed deployment instructions, see the [Deployment Guide](CopilotChatDirectLine/DEPLOYMENT.md).
 
 ## Azure Speech Service (Optional)
 

@@ -177,6 +177,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const spokenMessageIds = React.useRef(new Set<string>());
     const isSpeakingRef = React.useRef(false);
     const cancelSpeechRef = React.useRef(false);
+    // Track intentional mic stops to prevent auto-restart cycling
+    const intentionalStopRef = React.useRef(false);
+    const lastMicStopTimeRef = React.useRef(0);
+    const micRestartCooldownMs = 1500; // Minimum time between mic restarts
 
     // Detect if running on iOS/mobile
     const isMobile = React.useMemo(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent), []);
@@ -284,6 +288,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     React.useEffect(() => {
         if (drivingMode && isPlaying && recognitionRef.current) {
             console.log('🎤🛑 Driving mode: isPlaying=true, force-stopping mic to prevent interruption');
+            intentionalStopRef.current = true; // Mark as intentional stop
             try {
                 recognitionRef.current.stop();
             } catch (e) {
@@ -295,14 +300,30 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 clearTimeout(autoSendTimerRef.current);
                 autoSendTimerRef.current = null;
             }
+        } else if (drivingMode && !isPlaying && !isSending && !isTyping) {
+            // Bot finished speaking, allow auto-restart
+            intentionalStopRef.current = false;
         }
-    }, [drivingMode, isPlaying]);
+    }, [drivingMode, isPlaying, isSending, isTyping]);
 
     // Auto-start listening when driving mode is enabled and not busy
     React.useEffect(() => {
         if (drivingMode && !isListening && !isPlaying && !isSending && !isTyping && recognitionRef.current) {
+            // Check if we intentionally stopped - don't auto-restart
+            if (intentionalStopRef.current) {
+                console.log('🚗 Driving mode: Mic was intentionally stopped, skipping auto-restart');
+                return undefined;
+            }
+            
+            // Check cooldown period to prevent rapid cycling
+            const timeSinceLastStop = Date.now() - lastMicStopTimeRef.current;
+            const delayNeeded = Math.max(micRestartCooldownMs - timeSinceLastStop, 500);
+            
+            console.log(`🚗 Driving mode: Will auto-restart mic in ${delayNeeded}ms`);
+            
             const startTimer = setTimeout(() => {
-                if (drivingMode && !isListening && !isPlaying && !isSending && !isTyping) {
+                // Re-check all conditions including intentional stop
+                if (drivingMode && !isListening && !isPlaying && !isSending && !isTyping && !intentionalStopRef.current) {
                     console.log('🚗 Driving mode: Auto-starting mic...');
                     try {
                         setTranscribedText('');
@@ -312,7 +333,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                         console.log('🚗 Mic already active or unavailable');
                     }
                 }
-            }, 500);
+            }, delayNeeded);
             return () => clearTimeout(startTimer);
         }
         return undefined;
@@ -476,6 +497,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             try {
                                 if (drivingMode && recognitionRef.current) {
                                     console.log('🎤🔇 Driving mode: Stopping mic while bot speaks to prevent interruption');
+                                    intentionalStopRef.current = true;
                                     try {
                                         recognitionRef.current.stop();
                                     } catch (e) {
@@ -575,6 +597,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
                         autoSendTimerRef.current = setTimeout(() => {
                             console.log('🚗 Driving mode: Auto-sending message:', transcript);
+                            intentionalStopRef.current = true; // Stop mic while sending/waiting for response
                             if (recognitionRef.current) {
                                 try {
                                     recognitionRef.current.stop();
@@ -602,11 +625,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
             recognitionRef.current.onerror = (event: any) => {
                 console.error('Speech recognition error:', event.error);
+                lastMicStopTimeRef.current = Date.now();
                 setIsListening(false);
                 setTranscribedText('');
+                // Don't auto-restart on certain errors
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    intentionalStopRef.current = true;
+                    console.log('🎤 Mic permission denied, disabling auto-restart');
+                }
             };
 
             recognitionRef.current.onend = () => {
+                console.log('🎤 Speech recognition ended');
+                lastMicStopTimeRef.current = Date.now();
                 setIsListening(false);
                 if (!drivingMode) {
                     setTranscribedText('');
@@ -721,6 +752,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
 
         if (isListening) {
+            // User manually stopped - mark as intentional in driving mode to prevent auto-restart
+            if (drivingMode) {
+                intentionalStopRef.current = true;
+            }
             recognitionRef.current.stop();
             setIsListening(false);
             setTranscribedText('');
@@ -728,6 +763,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 clearTimeout(autoSendTimerRef.current);
             }
         } else {
+            // User manually started - clear intentional stop flag
+            intentionalStopRef.current = false;
             setTranscribedText('');
             setLastUserInput('');
             recognitionRef.current.start();
@@ -740,6 +777,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             alert('Speech recognition not supported in this browser');
             return;
         }
+        intentionalStopRef.current = false; // Clear flag when starting driving mode
         setTranscribedText('');
         setLastUserInput('');
         recognitionRef.current.start();
