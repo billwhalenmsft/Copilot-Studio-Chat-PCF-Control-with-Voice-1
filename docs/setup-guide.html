@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D365 Mobile Canvas Template – Setup Guide</title>
+    <style>
+        :root {
+            --primary: #0078d4;
+            --primary-dark: #005a9e;
+            --primary-light: #deecf9;
+            --success: #107c10;
+            --success-light: #dff6dd;
+            --warning: #ffb900;
+            --warning-light: #fff4ce;
+            --danger: #d13438;
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --text: #323130;
+            --text-secondary: #605e5c;
+            --border: #edebe9;
+            --shadow: 0 2px 8px rgba(0,0,0,0.08);
+            --radius: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #0078d4 0%, #00bcf2 100%);
+            color: white;
+            padding: 48px 24px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* Progress tracker */
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 40px;
+            right: 40px;
+            height: 3px;
+            background: var(--border);
+            z-index: 0;
+        }
+
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1;
+            flex: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+
+        .step-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-align: center;
+            max-width: 100px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 28px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .card-header .icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .icon-blue { background: var(--primary-light); }
+        .icon-green { background: var(--success-light); }
+        .icon-yellow { background: var(--warning-light); }
+
+        .card-header h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .card-header .step-num {
+            font-size: 0.75rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* Deploy button */
+        .deploy-section {
+            text-align: center;
+            padding: 32px 20px;
+        }
+
+        .deploy-btn {
+            display: inline-block;
+            text-decoration: none;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .deploy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,120,212,0.3);
+        }
+
+        .deploy-btn img {
+            height: 44px;
+        }
+
+        .deploy-note {
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Steps list */
+        ol.steps {
+            counter-reset: step;
+            list-style: none;
+            padding: 0;
+        }
+
+        ol.steps > li {
+            counter-increment: step;
+            position: relative;
+            padding: 12px 0 12px 44px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        ol.steps > li:last-child { border-bottom: none; }
+
+        ol.steps > li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 12px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--primary-light);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        ol.steps li strong {
+            color: var(--text);
+        }
+
+        /* Table */
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 0.9rem;
+        }
+
+        .config-table th {
+            background: var(--primary);
+            color: white;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .config-table th:first-child { border-radius: 6px 0 0 0; }
+        .config-table th:last-child { border-radius: 0 6px 0 0; }
+
+        .config-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .config-table tr:nth-child(even) td {
+            background: #fafafa;
+        }
+
+        .config-table tr:last-child td:first-child { border-radius: 0 0 0 6px; }
+        .config-table tr:last-child td:last-child { border-radius: 0 0 6px 0; }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.85em;
+            color: var(--primary-dark);
+        }
+
+        /* Info/Tip boxes */
+        .callout {
+            border-radius: var(--radius);
+            padding: 14px 18px;
+            margin: 14px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .callout-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+        .callout-info {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+        }
+
+        .callout-success {
+            background: var(--success-light);
+            border-left: 4px solid var(--success);
+        }
+
+        .callout-warning {
+            background: var(--warning-light);
+            border-left: 4px solid var(--warning);
+        }
+
+        .callout-tip {
+            background: #f3e8fd;
+            border-left: 4px solid #8764b8;
+        }
+
+        /* Links */
+        a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Prereq grid */
+        .prereq-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .prereq-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .prereq-item .check { color: var(--success); font-weight: bold; }
+
+        /* Sub-steps */
+        .sub-steps {
+            margin: 8px 0 0 0;
+            padding-left: 18px;
+            font-size: 0.9rem;
+        }
+
+        .sub-steps li {
+            margin-bottom: 6px;
+        }
+
+        /* Parameter cards */
+        .param-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 12px 0;
+        }
+
+        .param-card {
+            background: #fafafa;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
+        }
+
+        .param-card .param-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .param-card .param-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .param-card .param-default {
+            font-size: 0.75rem;
+            color: var(--primary);
+            margin-top: 4px;
+        }
+
+        /* Resources table */
+        .resource-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+            margin-top: 16px;
+        }
+
+        .footer a { color: var(--primary); }
+
+        /* Section divider */
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 32px 0 20px;
+        }
+
+        .section-divider span {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero h1 { font-size: 1.5rem; }
+            .param-grid, .prereq-grid { grid-template-columns: 1fr; }
+            .progress-bar { display: none; }
+            .card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+    <h1>🚀 D365 Mobile Canvas Template</h1>
+    <p>Setup guide for deploying Azure services and configuring the Copilot Chat PCF Control with Voice</p>
+</div>
+
+<div class="container">
+
+    <!-- Progress Tracker -->
+    <div class="progress-bar">
+        <div class="progress-step">
+            <div class="step-circle">1</div>
+            <div class="step-label">Prerequisites</div>
+        </div>
+        <div class="progress-step">
+            <div class="step-circle">2</div>
+            <div class="step-label">Deploy Azure</div>
+        </div>
+        <div class="progress-step">
+            <div class="step-circle">3</div>
+            <div class="step-label">Copy Outputs</div>
+        </div>
+        <div class="progress-step">
+            <div class="step-circle">4</div>
+            <div class="step-label">Import Solution</div>
+        </div>
+        <div class="progress-step">
+            <div class="step-circle">5</div>
+            <div class="step-label">Configure App</div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STEP 1: Prerequisites -->
+    <!-- ============================================ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-blue">📋</div>
+            <div>
+                <div class="step-num">Step 1</div>
+                <h2>Prerequisites</h2>
+            </div>
+        </div>
+        <p>Ensure you have the following before starting:</p>
+        <div class="prereq-grid">
+            <div class="prereq-item"><span class="check">✓</span> Azure subscription (Contributor access)</div>
+            <div class="prereq-item"><span class="check">✓</span> Dynamics 365 / Power Platform environment</div>
+            <div class="prereq-item"><span class="check">✓</span> Microsoft Copilot Studio bot with Web channel</div>
+            <div class="prereq-item"><span class="check">✓</span> Power Platform admin permissions</div>
+        </div>
+
+        <div class="callout callout-info" style="margin-top:16px;">
+            <span class="callout-icon">💡</span>
+            <div>
+                <strong>Copilot Studio Direct Line Secret:</strong> In Copilot Studio, go to
+                <strong>Settings → Channels → Web → Channel Security</strong> and copy the
+                <em>Direct Line Secret</em>. You'll need this in Step 4.
+                <br><a href="https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-web-security" target="_blank">📖 Learn more about Web channel security →</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STEP 2: Deploy Azure Resources -->
+    <!-- ============================================ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-blue">☁️</div>
+            <div>
+                <div class="step-num">Step 2</div>
+                <h2>Deploy Azure Resources</h2>
+            </div>
+        </div>
+        <p>Click the button below to automatically provision Azure Speech Services and Azure OpenAI in your subscription.</p>
+
+        <div class="deploy-section">
+            <a class="deploy-btn" href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmicrosoft%2FCopilot-Studio-Chat-PCF-Control-with-Voice%2Fmain%2Fazuredeploy.json" target="_blank">
+                <img src="https://aka.ms/deploytoazurebutton" alt="Deploy to Azure">
+            </a>
+            <div class="deploy-note">Opens the Azure Portal with a pre-configured ARM template</div>
+        </div>
+
+        <h3 style="margin-bottom: 10px; font-size: 1rem;">What Gets Created</h3>
+        <table class="config-table">
+            <thead>
+                <tr>
+                    <th>Resource</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>{prefix}-speech</code></td>
+                    <td><span class="resource-badge">🎙️ Speech Services</span></td>
+                    <td>Premium neural voice TTS &amp; speech-to-text</td>
+                </tr>
+                <tr>
+                    <td><code>{prefix}-openai</code></td>
+                    <td><span class="resource-badge">🤖 Azure OpenAI</span></td>
+                    <td>Natural OpenAI TTS voices &amp; chat capabilities</td>
+                </tr>
+                <tr>
+                    <td><code>gpt-4o-mini</code></td>
+                    <td><span class="resource-badge">🧠 Model Deployment</span></td>
+                    <td>Cost-effective model for TTS and general use</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3 style="margin: 18px 0 10px; font-size: 1rem;">Parameters to Fill In</h3>
+        <div class="param-grid">
+            <div class="param-card">
+                <div class="param-name">Resource Prefix</div>
+                <div class="param-desc">A unique name prefix (e.g., <code>contoso</code>). Creates <code>contoso-speech</code> and <code>contoso-openai</code>.</div>
+            </div>
+            <div class="param-card">
+                <div class="param-name">Location</div>
+                <div class="param-desc">Azure region for Speech Services.</div>
+                <div class="param-default">Default: resource group location</div>
+            </div>
+            <div class="param-card">
+                <div class="param-name">OpenAI Location</div>
+                <div class="param-desc">Azure region for OpenAI. Must support Azure OpenAI.</div>
+                <div class="param-default">Default: eastus2</div>
+            </div>
+            <div class="param-card">
+                <div class="param-name">Speech Service SKU</div>
+                <div class="param-desc"><code>F0</code> = Free (limited) · <code>S0</code> = Standard (pay-as-you-go)</div>
+                <div class="param-default">Default: S0</div>
+            </div>
+        </div>
+
+        <ol class="steps">
+            <li>Click <strong>Deploy to Azure</strong> and sign in to your subscription</li>
+            <li>Select or create a <strong>Resource Group</strong></li>
+            <li>Enter a unique <strong>Resource Prefix</strong> (lowercase, 3-15 characters)</li>
+            <li>Choose your <strong>regions</strong> and <strong>SKU</strong></li>
+            <li>Click <strong>Review + Create</strong>, then <strong>Create</strong></li>
+            <li>Wait for deployment to complete (~2-3 minutes)</li>
+        </ol>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STEP 3: Copy Output Values -->
+    <!-- ============================================ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-green">📋</div>
+            <div>
+                <div class="step-num">Step 3</div>
+                <h2>Copy Output Values</h2>
+            </div>
+        </div>
+        <p>After deployment completes, go to the <strong>Outputs</strong> tab in the Azure Portal and copy each value.</p>
+
+        <div class="callout callout-tip">
+            <span class="callout-icon">🎯</span>
+            <div>In the Azure Portal: <strong>Deployments → your deployment → Outputs</strong>. Each value maps to a Dynamics 365 environment variable.</div>
+        </div>
+
+        <table class="config-table">
+            <thead>
+                <tr>
+                    <th>Azure Output</th>
+                    <th>→ D365 Environment Variable</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>speechKey</code></td>
+                    <td><code>bw_SpeechKey</code></td>
+                    <td>Azure Speech subscription key</td>
+                </tr>
+                <tr>
+                    <td><code>speechRegion</code></td>
+                    <td><code>bw_SpeechRegion</code></td>
+                    <td>Region code (e.g., <code>eastus</code>)</td>
+                </tr>
+                <tr>
+                    <td><code>openAIEndpoint</code></td>
+                    <td><code>bw_OpenAIEndpoint</code></td>
+                    <td>Full OpenAI endpoint URL</td>
+                </tr>
+                <tr>
+                    <td><code>openAIKey</code></td>
+                    <td><code>bw_OpenAIKey</code></td>
+                    <td>Azure OpenAI API key</td>
+                </tr>
+                <tr>
+                    <td><code>openAIDeploymentName</code></td>
+                    <td><code>bw_OpenAIDeployment</code></td>
+                    <td>Model deployment name</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-warning">
+            <span class="callout-icon">🔐</span>
+            <div><strong>Security:</strong> These keys are sensitive. Store them securely and avoid sharing them in plain text. Consider linking environment variables to <a href="https://learn.microsoft.com/en-us/power-platform/admin/environmentvariables#use-azure-key-vault-secrets" target="_blank">Azure Key Vault</a> for production.</div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STEP 4: Import the Solution -->
+    <!-- ============================================ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-blue">📦</div>
+            <div>
+                <div class="step-num">Step 4</div>
+                <h2>Import the Solution</h2>
+            </div>
+        </div>
+
+        <ol class="steps">
+            <li>Download the solution file: <strong>D365MobileCanvasTemplate.zip</strong></li>
+            <li>Open the <a href="https://make.powerapps.com" target="_blank">Power Apps Maker Portal</a></li>
+            <li>Select your target <strong>environment</strong> from the top-right picker</li>
+            <li>Go to <strong>Solutions</strong> in the left navigation</li>
+            <li>Click <strong>Import solution</strong> → <strong>Browse</strong> → select the zip file</li>
+            <li>
+                On the <strong>Environment Variables</strong> page, enter values from Step 3:
+                <ul class="sub-steps">
+                    <li><strong>bw_DirectLineSecret</strong> — Your Copilot Studio Direct Line secret (from Step 1)</li>
+                    <li><strong>bw_SpeechKey</strong> — From Azure output <code>speechKey</code></li>
+                    <li><strong>bw_SpeechRegion</strong> — From Azure output <code>speechRegion</code></li>
+                    <li><strong>bw_OpenAIEndpoint</strong> — From Azure output <code>openAIEndpoint</code></li>
+                    <li><strong>bw_OpenAIKey</strong> — From Azure output <code>openAIKey</code></li>
+                    <li><strong>bw_OpenAIDeployment</strong> — From Azure output <code>openAIDeploymentName</code></li>
+                </ul>
+            </li>
+            <li>Set up <strong>Connection References</strong> when prompted (Dataverse, Outlook, etc.)</li>
+            <li>Click <strong>Import</strong> and wait for completion</li>
+        </ol>
+
+        <div class="callout callout-info">
+            <span class="callout-icon">⏱️</span>
+            <div>Solution import typically takes 3-5 minutes. You'll receive a notification when complete.</div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STEP 5: Configure & Launch -->
+    <!-- ============================================ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-green">🎉</div>
+            <div>
+                <div class="step-num">Step 5</div>
+                <h2>Configure &amp; Launch the App</h2>
+            </div>
+        </div>
+
+        <ol class="steps">
+            <li>In the <a href="https://make.powerapps.com" target="_blank">Maker Portal</a>, go to <strong>Apps</strong></li>
+            <li>Find the <strong>D365 Mobile Canvas Template</strong> app</li>
+            <li>Click <strong>Edit</strong> to open in Power Apps Studio</li>
+            <li>
+                Add the <strong>Environment Variable Values</strong> data source:
+                <ul class="sub-steps">
+                    <li>Click <strong>Data</strong> in the left panel → <strong>Add data</strong></li>
+                    <li>Search for <em>"Environment Variable Values"</em></li>
+                    <li>Select it to add as a Dataverse data source</li>
+                </ul>
+            </li>
+            <li>Verify the chat control loads and connects to your Copilot Studio bot</li>
+            <li>Click <strong>Save</strong> → <strong>Publish</strong></li>
+            <li>Share the app with your users via <strong>Share</strong></li>
+        </ol>
+
+        <div class="callout callout-success">
+            <span class="callout-icon">✅</span>
+            <div><strong>You're all set!</strong> The app should now display the Copilot Chat control with voice input/output, adaptive cards, and driving mode capabilities.</div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- Optional: Vision AI -->
+    <!-- ============================================ -->
+    <div class="section-divider">
+        <span>Optional Features</span>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-yellow">📸</div>
+            <div>
+                <div class="step-num">Optional</div>
+                <h2>Camera &amp; Vision AI</h2>
+            </div>
+        </div>
+        <p>Enable the camera button for equipment inspection, barcode scanning, or visual analysis powered by Azure OpenAI GPT-4o Vision.</p>
+
+        <table class="config-table">
+            <thead>
+                <tr>
+                    <th>Environment Variable</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>bw_VisionEndpoint</code></td>
+                    <td>Your Azure OpenAI endpoint (can reuse <code>openAIEndpoint</code> if GPT-4o is deployed there)</td>
+                </tr>
+                <tr>
+                    <td><code>bw_VisionApiKey</code></td>
+                    <td>API key for the Vision-capable OpenAI resource</td>
+                </tr>
+                <tr>
+                    <td><code>bw_VisionSystemPrompt</code></td>
+                    <td>Custom prompt for image analysis (e.g., <em>"You are an equipment inspector…"</em>)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+            <span class="callout-icon">💡</span>
+            <div>The camera button only appears when <code>EnableCamera</code> is set to <strong>Yes</strong> on the PCF control and <code>bw_VisionEndpoint</code> + <code>bw_VisionApiKey</code> are configured.</div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- Troubleshooting -->
+    <!-- ============================================ -->
+    <div class="section-divider">
+        <span>Troubleshooting</span>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-yellow">🔧</div>
+            <div>
+                <h2>Common Issues</h2>
+            </div>
+        </div>
+
+        <details style="margin-bottom: 12px;">
+            <summary style="cursor:pointer; font-weight:600; padding:8px 0;">Chat control shows "Unable to connect"</summary>
+            <div style="padding:8px 0 8px 16px; color: var(--text-secondary);">
+                <ul>
+                    <li>Verify <code>bw_DirectLineSecret</code> is set correctly</li>
+                    <li>Ensure the Copilot Studio bot Web channel is enabled</li>
+                    <li>Check that <code>bw_DirectLineEndpoint</code> is <code>https://directline.botframework.com/v3/directline</code></li>
+                </ul>
+            </div>
+        </details>
+
+        <details style="margin-bottom: 12px;">
+            <summary style="cursor:pointer; font-weight:600; padding:8px 0;">Voice not working</summary>
+            <div style="padding:8px 0 8px 16px; color: var(--text-secondary);">
+                <ul>
+                    <li>Confirm <code>bw_SpeechKey</code> and <code>bw_SpeechRegion</code> are set</li>
+                    <li>Ensure the app is served over HTTPS (required for microphone access)</li>
+                    <li>Check browser microphone permissions</li>
+                    <li>Try using <strong>Admin/Debug Mode</strong> to view detailed logs</li>
+                </ul>
+            </div>
+        </details>
+
+        <details style="margin-bottom: 12px;">
+            <summary style="cursor:pointer; font-weight:600; padding:8px 0;">"Name isn't valid" error in Canvas App</summary>
+            <div style="padding:8px 0 8px 16px; color: var(--text-secondary);">
+                <ul>
+                    <li>You need to add the <strong>Environment Variable Values</strong> data source</li>
+                    <li>In Power Apps Studio: <strong>Data → Add data → search "Environment Variable Values"</strong></li>
+                    <li>This is a built-in Dataverse table — no need to add it to the solution</li>
+                </ul>
+            </div>
+        </details>
+
+        <details>
+            <summary style="cursor:pointer; font-weight:600; padding:8px 0;">Azure deployment fails</summary>
+            <div style="padding:8px 0 8px 16px; color: var(--text-secondary);">
+                <ul>
+                    <li>Ensure your subscription has the <strong>Microsoft.CognitiveServices</strong> provider registered</li>
+                    <li>Check that your chosen region supports Azure OpenAI (not all regions do)</li>
+                    <li>Verify you have Contributor role on the resource group</li>
+                    <li>If you hit quota limits, try a different region or request a quota increase</li>
+                </ul>
+            </div>
+        </details>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- Quick Reference -->
+    <!-- ============================================ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="icon icon-blue">🔗</div>
+            <div>
+                <h2>Quick Links</h2>
+            </div>
+        </div>
+        <table class="config-table">
+            <thead>
+                <tr>
+                    <th>Resource</th>
+                    <th>Link</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>GitHub Repository</td>
+                    <td><a href="https://github.com/microsoft/Copilot-Studio-Chat-PCF-Control-with-Voice" target="_blank">microsoft/Copilot-Studio-Chat-PCF-Control-with-Voice</a></td>
+                </tr>
+                <tr>
+                    <td>Power Apps Maker Portal</td>
+                    <td><a href="https://make.powerapps.com" target="_blank">make.powerapps.com</a></td>
+                </tr>
+                <tr>
+                    <td>Azure Portal</td>
+                    <td><a href="https://portal.azure.com" target="_blank">portal.azure.com</a></td>
+                </tr>
+                <tr>
+                    <td>Copilot Studio</td>
+                    <td><a href="https://copilotstudio.microsoft.com" target="_blank">copilotstudio.microsoft.com</a></td>
+                </tr>
+                <tr>
+                    <td>Azure Speech Pricing</td>
+                    <td><a href="https://azure.microsoft.com/pricing/details/cognitive-services/speech-services/" target="_blank">Speech Services pricing →</a></td>
+                </tr>
+                <tr>
+                    <td>Azure OpenAI Pricing</td>
+                    <td><a href="https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/" target="_blank">OpenAI Service pricing →</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>D365 Mobile Canvas Template · Built with ❤️ by Microsoft Solution Engineering</p>
+        <p style="margin-top:4px;">
+            <a href="https://github.com/microsoft/Copilot-Studio-Chat-PCF-Control-with-Voice" target="_blank">GitHub</a> ·
+            <a href="https://github.com/microsoft/Copilot-Studio-Chat-PCF-Control-with-Voice/blob/main/LICENSE" target="_blank">MIT License</a> ·
+            <a href="https://github.com/microsoft/Copilot-Studio-Chat-PCF-Control-with-Voice/blob/main/SECURITY.md" target="_blank">Security</a>
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

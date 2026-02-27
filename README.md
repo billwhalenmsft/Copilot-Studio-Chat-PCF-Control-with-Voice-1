@@ -97,25 +97,61 @@ This ensures the chat control:
 
 For detailed deployment instructions, see the [Deployment Guide](CopilotChatDirectLine/DEPLOYMENT.md).
 
-## Azure Speech Service (Optional)
+## Deploy Azure Resources (Optional)
 
-For premium neural voices instead of browser voices:
+The control supports Azure Speech Services (for premium neural voices) and Azure OpenAI (for natural-sounding TTS). You can provision both resources with a single click:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmicrosoft%2FCopilot-Studio-Chat-PCF-Control-with-Voice%2Fmain%2Fazuredeploy.json)
+
+### What Gets Deployed
+
+| Resource | Type | Purpose |
+|----------|------|---------|
+| `{prefix}-speech` | Azure Speech Services | Premium neural voice TTS and speech-to-text |
+| `{prefix}-openai` | Azure OpenAI | Natural OpenAI TTS voices (echo, alloy, nova, etc.) |
+| Model deployment | OpenAI model (gpt-4o-mini default) | Language model for TTS and chat capabilities |
+
+### Deployment Steps
+
+1. Click the **Deploy to Azure** button above
+2. Sign in to your Azure subscription
+3. Fill in the parameters:
+   - **Resource Prefix**: A unique name prefix (e.g., `contoso`) — creates `contoso-speech` and `contoso-openai`
+   - **Location**: Region for Speech Services (e.g., `eastus`)
+   - **OpenAI Location**: Region for Azure OpenAI (e.g., `eastus2`)
+   - **OpenAI Model**: Choose model (default: `gpt-4o-mini`)
+   - **Speech Service SKU**: `F0` (free tier) or `S0` (standard)
+4. Click **Review + Create**, then **Create**
+5. Wait for deployment to complete (~2-3 minutes)
+6. Go to **Outputs** tab and copy these values into your Dynamics 365 environment variables:
+
+| Output | Environment Variable |
+|--------|---------------------|
+| `speechKey` | `bw_SpeechKey` |
+| `speechRegion` | `bw_SpeechRegion` |
+| `openAIEndpoint` | `bw_OpenAIEndpoint` |
+| `openAIKey` | `bw_OpenAIKey` |
+| `openAIDeploymentName` | `bw_OpenAIDeployment` |
+
+### Manual Setup
+
+If you prefer to create resources manually:
+
+#### Azure Speech Service
 
 1. Create an Azure Speech Service resource in the [Azure Portal](https://portal.azure.com)
 2. Copy your **KEY** and **REGION** from Keys and Endpoint
-3. Configure the control properties:
-   - **SpeechKey**: Your Speech Service key
-   - **SpeechRegion**: Your region code (e.g., `eastus`)
+3. Set environment variables:
+   - **bw_SpeechKey**: Your Speech Service key
+   - **bw_SpeechRegion**: Your region code (e.g., `eastus`)
 
-## Azure OpenAI TTS (Optional)
+#### Azure OpenAI TTS
 
-For natural-sounding OpenAI voices (English only):
-
-1. Create an Azure OpenAI resource with TTS model deployed
-2. Configure the control properties:
-   - **OpenAIEndpoint**: Your Azure OpenAI endpoint URL
-   - **OpenAIKey**: Your Azure OpenAI API key
-   - **OpenAIDeployment**: Deployment name (default: `tts`)
+1. Create an Azure OpenAI resource with a model deployed
+2. Set environment variables:
+   - **bw_OpenAIEndpoint**: Your Azure OpenAI endpoint URL
+   - **bw_OpenAIKey**: Your Azure OpenAI API key
+   - **bw_OpenAIDeployment**: Deployment name (default: `gpt-4o-mini`)
 
 ### Available Voice Profiles (English)
 
