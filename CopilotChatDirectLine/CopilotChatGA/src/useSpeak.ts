@@ -144,6 +144,16 @@ export function getAvailableVoices(hasAzureSpeech: boolean, hasOpenAI: boolean):
 // Detect if running on mobile
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+// Escape XML special characters for SSML
+function escapeXml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
 // Token cache to avoid repeated token fetches (for Azure Speech)
 let cachedToken: { token: string; expiry: number } | null = null;
 
@@ -239,6 +249,9 @@ export interface UseSpeakOptions {
     openAIDeployment?: string;
     voiceProfile?: string;
     audioUnlocked?: boolean;
+    // Multi-lingual support
+    language?: string;         // BCP-47 language code (e.g., 'en-US', 'es-CO')
+    voiceId?: string;          // Azure Neural voice ID (e.g., 'es-CO-SalomeNeural')
 }
 
 export interface UseSpeakReturn {
@@ -256,132 +269,173 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
         openAIKey,
         openAIDeployment = 'tts',
         voiceProfile = 'azure-jenny-friendly',
-        audioUnlocked = false
+        audioUnlocked = false,
+        // Multi-lingual support
+        language = 'en-US',
+        voiceId = ''
     } = options;
 
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
     const voiceProfileRef = React.useRef(voiceProfile);
+    const languageRef = React.useRef(language);
+    const voiceIdRef = React.useRef(voiceId);
+    
     voiceProfileRef.current = voiceProfile;
+    languageRef.current = language;
+    voiceIdRef.current = voiceId;
 
     const speak = React.useCallback(async (text: string): Promise<void> => {
-        let currentVoiceProfile = voiceProfileRef.current;
+        const currentVoiceProfile = voiceProfileRef.current;
+        const currentLanguage = languageRef.current;
+        const currentVoiceId = voiceIdRef.current;
 
         // Handle legacy voice profile names
+        let resolvedVoiceProfile = currentVoiceProfile;
         if (LEGACY_VOICE_MAP[currentVoiceProfile]) {
-            currentVoiceProfile = LEGACY_VOICE_MAP[currentVoiceProfile];
+            resolvedVoiceProfile = LEGACY_VOICE_MAP[currentVoiceProfile];
         }
 
-        const voiceConfig = VOICE_PROFILES[currentVoiceProfile];
+        const voiceConfig = VOICE_PROFILES[resolvedVoiceProfile];
         const hasAzureSpeech = !!(speechKey && speechRegion);
         const hasOpenAI = !!(openAIEndpoint && openAIKey);
+        
+        // Determine if we should use multi-lingual Azure voice
+        const useMultiLingual = currentVoiceId && currentLanguage && !currentLanguage.startsWith('en-');
+        const isEnglish = currentLanguage.startsWith('en-');
 
-        console.log('🎤 SPEAK - voice:', currentVoiceProfile, 'provider:', voiceConfig?.provider, 'azure:', hasAzureSpeech, 'openai:', hasOpenAI);
+        console.log('🎤 SPEAK - language:', currentLanguage, 'voiceId:', currentVoiceId, 'voiceProfile:', resolvedVoiceProfile, 'multiLingual:', useMultiLingual, 'azure:', hasAzureSpeech, 'openai:', hasOpenAI);
 
         if (isMobile && !audioUnlocked && (hasAzureSpeech || hasOpenAI)) {
             console.log('⚠️ Audio not unlocked on mobile');
             return;
         }
 
-        if (voiceConfig) {
-            try {
-                // Use OpenAI TTS with streaming for lower latency
-                if (voiceConfig.provider === 'openai' && hasOpenAI) {
-                    console.log(`🎤 OpenAI TTS (streaming): ${voiceConfig.voice}`);
-                    const baseUrl = openAIEndpoint!.replace(/\/$/, '');
-                    const url = `${baseUrl}/openai/deployments/${openAIDeployment}/audio/speech?api-version=2024-02-15-preview`;
+        try {
+            // For non-English languages, ALWAYS use Azure Speech with the selected voice
+            if (useMultiLingual && hasAzureSpeech) {
+                console.log(`🌍 Multi-lingual Azure Speech: ${currentVoiceId} (${currentLanguage})`);
+                
+                // Build SSML with the correct language and voice
+                const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${currentLanguage}"><voice name="${currentVoiceId}"><prosody rate="1.0" pitch="0%">${escapeXml(text)}</prosody></voice></speak>`;
 
-                    const response = await fetch(url, {
+                const authToken = await getAzureAuthToken(speechKey!, speechRegion!);
+
+                const response = await fetch(
+                    `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
+                    {
                         method: 'POST',
                         headers: {
-                            'api-key': openAIKey!,
-                            'Content-Type': 'application/json'
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/ssml+xml',
+                            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3'
                         },
-                        body: JSON.stringify({
-                            model: openAIDeployment,
-                            input: text,
-                            voice: voiceConfig.voice,
-                            response_format: 'mp3',  // mp3 works well with Web Audio API
-                            speed: 1.0
-                        })
-                    });
+                        body: ssml
+                    }
+                );
 
-                    if (!response.ok) throw new Error(`OpenAI TTS error: ${response.status}`);
-
-                    // Play audio (simple HTML Audio approach - reliable on mobile)
-                    return playAudioFromResponse(response, audioRef);
-                }
-
-                // Use Azure Speech (also with streaming)
-                if (voiceConfig.provider === 'azure' && hasAzureSpeech) {
-                    console.log(`🎤 Azure Speech (streaming): ${voiceConfig.voice} (${voiceConfig.style})`);
-
-                    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US"><voice name="${voiceConfig.voice}"><mstts:express-as style="${voiceConfig.style || 'chat'}" styledegree="1.5"><prosody rate="1.1" pitch="0%">${text}</prosody></mstts:express-as></voice></speak>`;
-
-                    const authToken = await getAzureAuthToken(speechKey!, speechRegion!);
-
-                    const response = await fetch(
-                        `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/ssml+xml',
-                                'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3'
-                            },
-                            body: ssml
-                        }
-                    );
-
-                    if (!response.ok) throw new Error(`Azure Speech error: ${response.status}`);
-                    return playAudioFromResponse(response, audioRef);
-                }
-
-                // Fallback scenarios
-                if (voiceConfig.provider === 'openai' && !hasOpenAI && hasAzureSpeech) {
-                    console.log('⚠️ OpenAI not configured, using Azure fallback');
-                    const fallback = VOICE_PROFILES['azure-jenny-chat'];
-                    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US"><voice name="${fallback.voice}"><mstts:express-as style="${fallback.style}" styledegree="1.5"><prosody rate="1.1" pitch="0%">${text}</prosody></mstts:express-as></voice></speak>`;
-                    const authToken = await getAzureAuthToken(speechKey!, speechRegion!);
-                    const response = await fetch(
-                        `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/ssml+xml',
-                                'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3'
-                            },
-                            body: ssml
-                        }
-                    );
-                    if (!response.ok) throw new Error(`Azure Speech error: ${response.status}`);
-                    return playAudioFromResponse(response, audioRef);
-                }
-
-                if (voiceConfig.provider === 'azure' && !hasAzureSpeech && hasOpenAI) {
-                    console.log('⚠️ Azure not configured, using OpenAI fallback');
-                    const baseUrl = openAIEndpoint!.replace(/\/$/, '');
-                    const url = `${baseUrl}/openai/deployments/${openAIDeployment}/audio/speech?api-version=2024-02-15-preview`;
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'api-key': openAIKey!,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            model: openAIDeployment,
-                            input: text,
-                            voice: 'echo',
-                            response_format: 'mp3',
-                            speed: 1.0
-                        })
-                    });
-                    if (!response.ok) throw new Error(`OpenAI TTS error: ${response.status}`);
-                    return playAudioFromResponse(response, audioRef);
-                }
-            } catch (error) {
-                console.error('❌ TTS failed:', error);
+                if (!response.ok) throw new Error(`Azure Speech error: ${response.status}`);
+                return playAudioFromResponse(response, audioRef);
             }
+
+            // For English, use OpenAI if selected and available (more natural voices)
+            if (voiceConfig?.provider === 'openai' && hasOpenAI && isEnglish) {
+                console.log(`🎤 OpenAI TTS (streaming): ${voiceConfig.voice}`);
+                const baseUrl = openAIEndpoint!.replace(/\/$/, '');
+                const url = `${baseUrl}/openai/deployments/${openAIDeployment}/audio/speech?api-version=2024-02-15-preview`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'api-key': openAIKey!,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: openAIDeployment,
+                        input: text,
+                        voice: voiceConfig.voice,
+                        response_format: 'mp3',
+                        speed: 1.0
+                    })
+                });
+
+                if (!response.ok) throw new Error(`OpenAI TTS error: ${response.status}`);
+                return playAudioFromResponse(response, audioRef);
+            }
+
+            // Use Azure Speech for English with selected voice profile
+            if (voiceConfig?.provider === 'azure' && hasAzureSpeech) {
+                console.log(`🎤 Azure Speech: ${voiceConfig.voice} (${voiceConfig.style})`);
+
+                const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${currentLanguage || 'en-US'}"><voice name="${voiceConfig.voice}"><mstts:express-as style="${voiceConfig.style || 'chat'}" styledegree="1.5"><prosody rate="1.1" pitch="0%">${escapeXml(text)}</prosody></mstts:express-as></voice></speak>`;
+
+                const authToken = await getAzureAuthToken(speechKey!, speechRegion!);
+
+                const response = await fetch(
+                    `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/ssml+xml',
+                            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3'
+                        },
+                        body: ssml
+                    }
+                );
+
+                if (!response.ok) throw new Error(`Azure Speech error: ${response.status}`);
+                return playAudioFromResponse(response, audioRef);
+            }
+
+            // Multi-lingual Azure as fallback when voiceId is set
+            if (currentVoiceId && hasAzureSpeech) {
+                console.log(`🌍 Azure Speech fallback: ${currentVoiceId} (${currentLanguage})`);
+                
+                const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${currentLanguage}"><voice name="${currentVoiceId}"><prosody rate="1.0" pitch="0%">${escapeXml(text)}</prosody></voice></speak>`;
+
+                const authToken = await getAzureAuthToken(speechKey!, speechRegion!);
+
+                const response = await fetch(
+                    `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/ssml+xml',
+                            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3'
+                        },
+                        body: ssml
+                    }
+                );
+
+                if (!response.ok) throw new Error(`Azure Speech error: ${response.status}`);
+                return playAudioFromResponse(response, audioRef);
+            }
+
+            // Fallback: OpenAI for Azure voice profile when Azure not configured
+            if (voiceConfig?.provider === 'azure' && !hasAzureSpeech && hasOpenAI) {
+                console.log('⚠️ Azure not configured, using OpenAI fallback');
+                const baseUrl = openAIEndpoint!.replace(/\/$/, '');
+                const url = `${baseUrl}/openai/deployments/${openAIDeployment}/audio/speech?api-version=2024-02-15-preview`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'api-key': openAIKey!,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: openAIDeployment,
+                        input: text,
+                        voice: 'echo',
+                        response_format: 'mp3',
+                        speed: 1.0
+                    })
+                });
+                if (!response.ok) throw new Error(`OpenAI TTS error: ${response.status}`);
+                return playAudioFromResponse(response, audioRef);
+            }
+        } catch (error) {
+            console.error('❌ TTS failed:', error);
         }
 
         // Browser fallback
@@ -390,11 +444,14 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
 
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
+        utterance.lang = currentLanguage || 'en-US';
         utterance.rate = 1.1;
 
         const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(v => v.name.includes('Natural') || v.name.includes('Neural'))
+        // Try to find a voice matching the language
+        const langVoice = voices.find(v => v.lang.startsWith(currentLanguage.split('-')[0]));
+        const preferredVoice = langVoice 
+            || voices.find(v => v.name.includes('Natural') || v.name.includes('Neural'))
             || voices.find(v => v.lang.startsWith('en-US'));
         if (preferredVoice) utterance.voice = preferredVoice;
 

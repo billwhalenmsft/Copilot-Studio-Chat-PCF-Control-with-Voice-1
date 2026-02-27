@@ -215,7 +215,7 @@ export interface UseAttachmentsReturn {
     clearAttachments: () => void;
     getDirectLineAttachments: () => DirectLineAttachment[];
     openFilePicker: () => void;
-    fileInputRef: React.RefObject<HTMLInputElement | null>;
+    fileInputRef: React.RefObject<HTMLInputElement>;
     getAcceptString: () => string;
     hasAttachments: boolean;
     totalSize: number;
