@@ -2,7 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "description": "Deploys Azure Speech Services and Azure OpenAI resources for the Copilot Chat PCF Control with Voice."
+    "description": "Deploys Azure AI Speech and Azure OpenAI resources required by the D365 Mobile Canvas Template solution. Provisions speech-to-text/text-to-speech capabilities and an OpenAI model deployment for natural voice output. After deployment, copy the output values into your Dynamics 365 environment variables."
   },
   "parameters": {
     "resourcePrefix": {
@@ -10,14 +10,14 @@
       "minLength": 3,
       "maxLength": 15,
       "metadata": {
-        "description": "A unique prefix (3-15 chars, lowercase letters/numbers) used to name all resources. Example: 'contoso' creates 'contoso-speech' and 'contoso-openai'."
+        "description": "A short, unique name prefix (3-15 lowercase letters/numbers) that identifies your organization or project. This prefix is used to name all Azure resources created by this template. For example, entering 'contoso' will create resources named 'contoso-speech' and 'contoso-openai'. Must be globally unique across Azure."
       }
     },
     "location": {
       "type": "string",
       "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Azure region for Speech Services. Must support Speech Services. Common: eastus, westus2, westeurope."
+        "description": "Azure region where the Speech Services resource will be deployed. Choose a region close to your users for lower latency. Speech Services is available in most Azure regions. Defaults to the same region as your resource group. Common choices: eastus, westus2, westeurope, southeastasia."
       }
     },
     "openAILocation": {
@@ -47,7 +47,7 @@
         "westus3"
       ],
       "metadata": {
-        "description": "Azure region for OpenAI. Must support Azure OpenAI Service. Default: eastus2."
+        "description": "Azure region where the OpenAI resource will be deployed. Azure OpenAI is only available in specific regions — the dropdown shows all supported locations. Choose a region that supports the model you selected. Default: eastus2 (supports all models). Note: This can be a different region than Speech Services."
       }
     },
     "openAIModelName": {
@@ -60,14 +60,14 @@
         "gpt-35-turbo"
       ],
       "metadata": {
-        "description": "The OpenAI model to deploy. gpt-4o-mini is recommended for cost-effective TTS and general use."
+        "description": "The OpenAI model to deploy for text-to-speech and chat capabilities. Options: gpt-4o-mini (RECOMMENDED — most cost-effective, great quality), gpt-4o (highest quality, higher cost), gpt-4 (previous gen), gpt-35-turbo (legacy, lowest cost). The model powers the natural-sounding OpenAI voices (echo, alloy, nova, shimmer, etc.) in the chat control."
       }
     },
     "openAIModelVersion": {
       "type": "string",
       "defaultValue": "2024-07-18",
       "metadata": {
-        "description": "Model version to deploy. Default '2024-07-18' for gpt-4o-mini. Check Azure docs for available versions."
+        "description": "The specific version of the selected OpenAI model. Leave as default unless you need a specific version. Default '2024-07-18' works with gpt-4o-mini. If you change the model, you may need to update this — check https://learn.microsoft.com/azure/ai-services/openai/concepts/models for available versions per model."
       }
     },
     "openAIDeploymentCapacity": {
@@ -76,7 +76,7 @@
       "minValue": 1,
       "maxValue": 100,
       "metadata": {
-        "description": "Deployment capacity in thousands of tokens per minute (TPM). Default: 10K TPM. Increase for higher throughput."
+        "description": "How much capacity to allocate, measured in thousands of tokens per minute (TPM). Default: 10 (= 10,000 TPM) is sufficient for most demos and small teams. For production with many concurrent users, increase to 30-50. Maximum: 100. Higher values may require quota approval. You can adjust this later in the Azure Portal without redeploying."
       }
     },
     "speechServiceSku": {
@@ -87,7 +87,7 @@
         "S0"
       ],
       "metadata": {
-        "description": "Speech Services pricing tier. F0 = Free (limited), S0 = Standard (pay-as-you-go)."
+        "description": "Speech Services pricing tier. F0 (Free) = 5 hours of speech-to-text and 0.5M characters of text-to-speech per month — great for testing but limited. S0 (Standard) = pay-as-you-go with no monthly limits — recommended for demos and production. Pricing: ~$1 per hour of STT, ~$16 per 1M characters of neural TTS. See https://azure.microsoft.com/pricing/details/cognitive-services/speech-services/"
       }
     }
   },
@@ -159,49 +159,49 @@
       "type": "string",
       "value": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', variables('speechAccountName')), '2024-10-01').key1]",
       "metadata": {
-        "description": "Copy this value to the 'bw_SpeechKey' environment variable in your Dynamics 365 environment."
+        "description": "🔑 SPEECH KEY — Copy this value into the 'bw_SpeechKey' environment variable in your Dynamics 365 environment. This key authenticates speech-to-text and text-to-speech API calls."
       }
     },
     "speechRegion": {
       "type": "string",
       "value": "[parameters('location')]",
       "metadata": {
-        "description": "Copy this value to the 'bw_SpeechRegion' environment variable in your Dynamics 365 environment."
+        "description": "🌍 SPEECH REGION — Copy this value into the 'bw_SpeechRegion' environment variable. This is the Azure region code (e.g., eastus) where your Speech resource was created."
       }
     },
     "openAIEndpoint": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', variables('openAIAccountName')), '2024-10-01').endpoint]",
       "metadata": {
-        "description": "Copy this value to the 'bw_OpenAIEndpoint' environment variable in your Dynamics 365 environment."
+        "description": "🌐 OPENAI ENDPOINT — Copy this full URL into the 'bw_OpenAIEndpoint' environment variable. This is the base URL for all Azure OpenAI API calls (format: https://your-resource.openai.azure.com/)."
       }
     },
     "openAIKey": {
       "type": "string",
       "value": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', variables('openAIAccountName')), '2024-10-01').key1]",
       "metadata": {
-        "description": "Copy this value to the 'bw_OpenAIKey' environment variable in your Dynamics 365 environment."
+        "description": "🔑 OPENAI KEY — Copy this value into the 'bw_OpenAIKey' environment variable. This key authenticates OpenAI API calls for text-to-speech with natural voices."
       }
     },
     "openAIDeploymentName": {
       "type": "string",
       "value": "[variables('openAIDeploymentName')]",
       "metadata": {
-        "description": "Copy this value to the 'bw_OpenAIDeployment' environment variable in your Dynamics 365 environment."
+        "description": "📦 OPENAI DEPLOYMENT — Copy this value into the 'bw_OpenAIDeployment' environment variable. This is the name of the model deployment (e.g., gpt-4o-mini) that handles TTS requests."
       }
     },
     "openAIResourceName": {
       "type": "string",
       "value": "[variables('openAIAccountName')]",
       "metadata": {
-        "description": "The name of the Azure OpenAI resource created."
+        "description": "ℹ️ FOR REFERENCE — The name of the Azure OpenAI resource created in your subscription. Use this to find the resource in the Azure Portal if you need to manage keys, add deployments, or configure networking."
       }
     },
     "speechResourceName": {
       "type": "string",
       "value": "[variables('speechAccountName')]",
       "metadata": {
-        "description": "The name of the Azure Speech Services resource created."
+        "description": "ℹ️ FOR REFERENCE — The name of the Azure Speech Services resource created in your subscription. Use this to find the resource in the Azure Portal if you need to rotate keys or check usage."
       }
     }
   }
