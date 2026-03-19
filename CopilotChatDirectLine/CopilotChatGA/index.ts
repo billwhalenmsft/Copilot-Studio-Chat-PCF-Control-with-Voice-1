@@ -1,6 +1,6 @@
 ﻿/**
  * CopilotChatGA - PCF Standard Control Entry Point
- * Stable v1.2.8 release
+ * Stable v1.3.1 release
  */
 
 import Control, { ControlProps } from './src/Control';
