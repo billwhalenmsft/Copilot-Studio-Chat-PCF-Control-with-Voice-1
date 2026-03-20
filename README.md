@@ -226,6 +226,77 @@ The following control properties contain sensitive credentials that are visible 
 
 > ⚠️ Property descriptions now include 🔐 SENSITIVE warnings to remind administrators.
 
+## Environment Variables Reference
+
+The **D365MobileCanvasTemplate** solution ships with Power Platform Environment Variables for configuration. After importing, set values for your environment in the solution's Environment Variables section.
+
+### Required — Core
+
+| Variable | Description |
+|----------|-------------|
+| `bw_DirectLineSecret` | 🔐 Direct Line secret from Copilot Studio (Settings → Channels → Direct Line) |
+| `bw_DirectLineEndpoint` | Direct Line endpoint URL. Default: `https://directline.botframework.com/v3/directline` |
+
+### Required — Voice (choose one option)
+
+#### Option A: Speech Proxy (Recommended — for managed identity / no API keys)
+
+| Variable | Description |
+|----------|-------------|
+| `bw_SpeechProxyEndpoint` | Azure Function speech proxy URL (e.g., `https://func-speech-proxy.azurewebsites.net`) |
+| `bw_SpeechProxyApiKey` | 🔐 API key for authenticating to the proxy (`FUNCTION_API_KEY` value) |
+| `bw_SpeechRegion` | Azure region for Speech Service (e.g., `eastus`) |
+
+#### Option B: Direct API Keys
+
+| Variable | Description |
+|----------|-------------|
+| `bw_SpeechKey` | 🔐 Azure Speech Services subscription key |
+| `bw_SpeechRegion` | Azure region (e.g., `eastus`) |
+| `bw_OpenAIEndpoint` | Azure OpenAI endpoint URL (for TTS voices) |
+| `bw_OpenAIKey` | 🔐 Azure OpenAI API key |
+| `bw_OpenAIDeployment` | TTS deployment name (default: `tts`) |
+
+### Optional — Copilot Studio Agent
+
+| Variable | Description |
+|----------|-------------|
+| `bw_CopilotStudioBotID` | Bot ID from Copilot Studio |
+| `bw_CopilotStudioTenantID` | Power Platform environment ID |
+| `bw_COPILOT_STUDIO_ENDPOINT` | Direct Line endpoint for the bot (if different from default) |
+| `bw_Copilot_Studio_Timeout` | Bot response timeout in seconds (default: `30`) |
+| `bw_PrimaryAgent` | Primary agent type: `CopilotStudio`, `AzureOpenAI`, etc. |
+| `bw_EnableA2A` | Enable agent-to-agent routing (`true` / `false`) |
+| `bw_FallbackAgent` | Fallback agent identifier |
+
+### Optional — Azure Services
+
+| Variable | Description |
+|----------|-------------|
+| `bw_DATAVERSE_URL` | Dataverse org URL (e.g., `https://org.crm.dynamics.com`) |
+| `bw_FunctionsBaseURL` | Base URL for orchestrator Azure Functions / Container Apps |
+| `bw_AzureOpenAIDeploymentName` | Azure OpenAI chat deployment name (e.g., `gpt-4o-mini`) |
+| `bw_AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint (for orchestrator, not TTS) |
+
+### Optional — Vision (Camera AI)
+
+| Variable | Description |
+|----------|-------------|
+| `bw_VisionEndpoint` | Vision proxy Azure Function URL (e.g., `https://func.azurewebsites.net/api/analyze`) |
+| `bw_VisionApiKey` | 🔐 API key for vision proxy function |
+| `bw_VisionSystemPrompt` | System prompt for image analysis (customizable per industry) |
+
+### Optional — General
+
+| Variable | Description |
+|----------|-------------|
+| `bw_OrganizationName` | Display name for the organization |
+| `bw_EnvironmentType` | Environment label (`local`, `dev`, `demo`, `prod`) |
+| `bw_MaxRetries` | Max retry count for API calls |
+| `bw_TimeoutSeconds` | General timeout in seconds |
+| `bw_SalesforceAgentEndpoint` | Salesforce Agentforce endpoint (if using cross-platform agents) |
+| `bw_CUSTOM_LOGO_URL` | CDN/blob URL for custom branding logo |
+
 ## Project Structure
 
 ```
