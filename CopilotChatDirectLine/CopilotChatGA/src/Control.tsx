@@ -25,6 +25,11 @@ export interface ControlProps {
     OpenAIEndpoint?: PropertyValue<string>;
     OpenAIKey?: PropertyValue<string>;
     OpenAIDeployment?: PropertyValue<string>;
+    EntraTenantId?: PropertyValue<string>;
+    EntraClientId?: PropertyValue<string>;
+    EntraClientSecret?: PropertyValue<string>;
+    SpeechProxyEndpoint?: PropertyValue<string>;
+    SpeechProxyApiKey?: PropertyValue<string>;
     ModalTitle?: PropertyValue<string>;
     EnableAttachments?: PropertyValue<boolean>;
     AttachmentIcon?: PropertyValue<string>;
@@ -139,6 +144,11 @@ const ChatDirectLineControl: React.FC<ControlProps> = (props) => {
             openAIEndpoint={props.OpenAIEndpoint?.raw || undefined}
             openAIKey={props.OpenAIKey?.raw || undefined}
             openAIDeployment={props.OpenAIDeployment?.raw || 'tts'}
+            entraTenantId={props.EntraTenantId?.raw || undefined}
+            entraClientId={props.EntraClientId?.raw || undefined}
+            entraClientSecret={props.EntraClientSecret?.raw || undefined}
+            speechProxyEndpoint={props.SpeechProxyEndpoint?.raw || undefined}
+            speechProxyApiKey={props.SpeechProxyApiKey?.raw || undefined}
             isReconnected={isReconnected}
             modalTitle={props.ModalTitle?.raw || undefined}
             enableAttachments={props.EnableAttachments?.raw === true}

@@ -11,6 +11,8 @@ export interface IInputs {
     OpenAIEndpoint: ComponentFramework.PropertyTypes.StringProperty;
     OpenAIKey: ComponentFramework.PropertyTypes.StringProperty;
     OpenAIDeployment: ComponentFramework.PropertyTypes.StringProperty;
+    SpeechProxyEndpoint: ComponentFramework.PropertyTypes.StringProperty;
+    SpeechProxyApiKey: ComponentFramework.PropertyTypes.StringProperty;
     ModalTitle: ComponentFramework.PropertyTypes.StringProperty;
     EnableAttachments: ComponentFramework.PropertyTypes.TwoOptionsProperty;
     AttachmentIcon: ComponentFramework.PropertyTypes.StringProperty;

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="Copilot" constructor="CopilotStudioChatGA" version="1.3.1" display-name-key="Copilot Studio Chat GA" description-key="Generally Available - Stable release with Driving Mode, Adaptive Cards, Voice (Azure + OpenAI), and Attachments" control-type="standard" >
+  <control namespace="Copilot" constructor="CopilotStudioChatGA" version="1.3.3" display-name-key="Copilot Studio Chat GA" description-key="Generally Available - Stable release with Driving Mode, Adaptive Cards, Voice (Azure + OpenAI), and Attachments" control-type="standard" >
     <!--external-service-usage node declares whether this 3rd party PCF control is using external service or not, if yes, this control will be considered as premium and require corresponding license, Default is false -->
     <external-service-usage enabled="false" />
     
@@ -16,6 +16,10 @@
     <property name="OpenAIEndpoint" display-name-key="OpenAIEndpoint" description-key="Azure OpenAI Endpoint for TTS (e.g., https://your-resource.openai.azure.com/)" of-type="SingleLine.Text" usage="input" required="false" />
     <property name="OpenAIKey" display-name-key="OpenAIKey" description-key="Azure OpenAI API Key for TTS" of-type="SingleLine.Text" usage="input" required="false" />
     <property name="OpenAIDeployment" display-name-key="OpenAIDeployment" description-key="Azure OpenAI TTS Deployment Name (default: tts)" of-type="SingleLine.Text" usage="input" required="false" default-value="tts" />
+    
+    <!-- Speech Proxy (Managed Identity) - use instead of API keys when key access is disabled -->
+    <property name="SpeechProxyEndpoint" display-name-key="SpeechProxyEndpoint" description-key="Azure Function speech proxy URL for managed identity auth (e.g., https://func-speech-proxy.azurewebsites.net). Provides /api/azure-tts and /api/openai-tts endpoints." of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="SpeechProxyApiKey" display-name-key="SpeechProxyApiKey" description-key="🔐 SENSITIVE - API key for the speech proxy Azure Function. Recommend using Environment Variables for production." of-type="SingleLine.Text" usage="input" required="false" />
     
     <!-- UI Configuration -->
     <property name="ModalTitle" display-name-key="ModalTitle" description-key="Title displayed on the Driving Mode modal (default: Copilot Assistant)" of-type="SingleLine.Text" usage="input" required="false" default-value="Copilot Assistant" />

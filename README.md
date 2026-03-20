@@ -84,7 +84,28 @@ For detailed setup instructions, see the [Setup Guide](SETUP_GUIDE.md).
 
 ## Azure Speech Service (Optional)
 
-For premium neural voices instead of browser voices:
+For premium neural voices instead of browser voices, you have two options:
+
+### Option A: Speech Proxy with Managed Identity (Recommended)
+
+Use the included Azure Function proxy when API key access is disabled or you want to use managed identity. The proxy handles authentication server-side via `DefaultAzureCredential`.
+
+1. Deploy the speech proxy Azure Function from `azure-functions/speech-proxy/`
+2. Enable system-assigned managed identity on the Function App
+3. Assign **Cognitive Services User** role on your Azure Speech resource
+4. Assign **Cognitive Services User** role on your Azure OpenAI resource (if using OpenAI TTS)
+5. Configure the Function App settings:
+   - `AZURE_SPEECH_REGION`: Your region code (e.g., `eastus`)
+   - `AZURE_OPENAI_ENDPOINT`: Your Azure OpenAI endpoint (if using OpenAI TTS)
+   - `AZURE_OPENAI_DEPLOYMENT`: TTS deployment name (default: `tts`)
+   - `FUNCTION_API_KEY`: A secret key to authenticate client requests
+6. Configure the PCF control properties:
+   - **SpeechProxyEndpoint**: Your Function App URL (e.g., `https://func-speech-proxy.azurewebsites.net`)
+   - **SpeechProxyApiKey**: The `FUNCTION_API_KEY` value you set above
+
+### Option B: Direct API Keys
+
+If your Azure resources have API key access enabled:
 
 1. Create an Azure Speech Service resource in the [Azure Portal](https://portal.azure.com)
 2. Copy your **KEY** and **REGION** from Keys and Endpoint
@@ -96,6 +117,10 @@ For premium neural voices instead of browser voices:
 
 For natural-sounding OpenAI voices (English only):
 
+### With Speech Proxy (Recommended)
+If using the speech proxy (Option A above), OpenAI TTS is handled automatically — the proxy routes to the OpenAI endpoint configured in its environment variables. No additional PCF control properties are needed.
+
+### With Direct API Keys
 1. Create an Azure OpenAI resource with TTS model deployed
 2. Configure the control properties:
    - **OpenAIEndpoint**: Your Azure OpenAI endpoint URL
@@ -191,6 +216,7 @@ The following control properties contain sensitive credentials that are visible 
 | `DirectLineSecret` | Direct Line Secret from Copilot Studio |
 | `SpeechKey` | Azure Speech Service subscription key |
 | `OpenAIKey` | Azure OpenAI API key |
+| `SpeechProxyApiKey` | API key for the speech proxy Azure Function |
 
 ### Recommendations for Production
 
@@ -204,11 +230,22 @@ The following control properties contain sensitive credentials that are visible 
 
 ```
 ├── CopilotChatDirectLine/          # PCF Control Source
-│   ├── CopilotChatBeta/           # Beta version (latest features)
-│   ├── CopilotChatGA/             # General Availability (stable)
+│   ├── CopilotChatBeta/           # Beta version (v2.0.6 - latest features)
+│   ├── CopilotChatGA/             # General Availability (v1.3.3 - stable)
+│   ├── Solutions/                 # Power Platform solution project
 │   └── package.json
 │
-├── CopilotChatPCFControl/         # Solution Package
+├── azure-functions/                # Azure Function Proxies
+│   ├── speech-proxy/              # TTS proxy with managed identity (DefaultAzureCredential)
+│   │   ├── src/functions/
+│   │   │   ├── azureTts.ts        # POST /api/azure-tts - Azure Speech TTS
+│   │   │   └── openaiTts.ts       # POST /api/openai-tts - Azure OpenAI TTS
+│   │   └── src/shared.ts          # Auth + CORS helpers
+│   └── vision-proxy/              # Vision API proxy
+│
+├── TokenExchangeFunction/         # Token Exchange for Copilot Studio auth
+│
+├── CopilotChatPCFControl/         # Legacy Solution Package
 │   └── src/
 ```
 

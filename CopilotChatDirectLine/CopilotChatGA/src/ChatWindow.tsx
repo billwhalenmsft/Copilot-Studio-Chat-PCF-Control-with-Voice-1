@@ -77,6 +77,11 @@ export interface ChatWindowProps {
     openAIEndpoint?: string;
     openAIKey?: string;
     openAIDeployment?: string;
+    entraTenantId?: string;
+    entraClientId?: string;
+    entraClientSecret?: string;
+    speechProxyEndpoint?: string;
+    speechProxyApiKey?: string;
     isReconnected?: boolean;
     modalTitle?: string;
     enableAttachments?: boolean;
@@ -92,6 +97,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     openAIEndpoint,
     openAIKey,
     openAIDeployment = 'tts',
+    entraTenantId,
+    entraClientId,
+    entraClientSecret,
+    speechProxyEndpoint,
+    speechProxyApiKey,
     isReconnected = false,
     modalTitle,
     enableAttachments = false,
@@ -155,8 +165,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const isIOS = React.useMemo(() => /iPhone|iPad|iPod/i.test(navigator.userAgent), []);
 
     // Check which speech providers are configured
-    const hasAzureSpeech = !!(speechKey && speechRegion);
-    const hasOpenAI = !!(openAIEndpoint && openAIKey);
+    const hasEntraAuth = !!(entraTenantId && entraClientId && entraClientSecret);
+    const hasProxy = !!speechProxyEndpoint;
+    const hasAzureSpeech = !!(hasProxy || hasEntraAuth || (speechKey && speechRegion));
+    const hasOpenAI = !!(hasProxy || hasEntraAuth || (openAIEndpoint && openAIKey));
     const availableVoices = React.useMemo(
         () => getAvailableVoices(hasAzureSpeech, hasOpenAI),
         [hasAzureSpeech, hasOpenAI]
@@ -168,6 +180,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         openAIEndpoint,
         openAIKey,
         openAIDeployment,
+        entraTenantId,
+        entraClientId,
+        entraClientSecret,
+        speechProxyEndpoint,
+        speechProxyApiKey,
         voiceProfile,
         audioUnlocked,
         language: selectedLanguage
