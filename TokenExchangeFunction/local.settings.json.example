@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "ENTRA_CLIENT_ID": "YOUR_APP_REGISTRATION_CLIENT_ID",
+    "ENTRA_TENANT_ID": "YOUR_ENTRA_TENANT_ID"
+  }
+}

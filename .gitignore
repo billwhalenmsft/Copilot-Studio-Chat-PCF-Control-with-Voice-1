@@ -3,6 +3,26 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Local test configuration (contains API keys)
+test-config.local.json
+setup-test-harness.html
+
+# Azure Functions local settings (contains secrets)
+local.settings.json
+
+# TokenExchangeFunction build artifacts
+TokenExchangeFunction/dist/
+TokenExchangeFunction/deploy_temp/
+TokenExchangeFunction/deploy.zip
+TokenExchangeFunction/node_modules/
+
+# Environment-specific config files (contain org-specific URLs/GUIDs)
+**/spa-update*.json
+**/appreg-config.json
+**/app-api-config.json
+**/exported_current/
+**/exported_current.zip
+
 # User-specific files
 *.rsuser
 *.suo
