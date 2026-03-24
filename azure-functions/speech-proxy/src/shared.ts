@@ -9,14 +9,8 @@ import { DefaultAzureCredential } from "@azure/identity";
 
 // Singleton credential — DefaultAzureCredential tries managed identity first,
 // then falls back to Azure CLI, environment variables, etc.
-let credential: DefaultAzureCredential | null = null;
-
-function getCredential(): DefaultAzureCredential {
-    if (!credential) {
-        credential = new DefaultAzureCredential();
-    }
-    return credential;
-}
+// Eagerly created so the credential provider chain is resolved at startup.
+const credential = new DefaultAzureCredential();
 
 // Token cache to avoid fetching a new Entra ID token on every request
 let cachedToken: { token: string; expiry: number } | null = null;
@@ -31,14 +25,16 @@ export async function getCognitiveServicesToken(): Promise<string> {
         return cachedToken.token;
     }
 
-    const cred = getCredential();
-    const tokenResponse = await cred.getToken("https://cognitiveservices.azure.com/.default");
+    const tokenResponse = await credential.getToken("https://cognitiveservices.azure.com/.default");
     cachedToken = {
         token: tokenResponse.token,
         expiry: tokenResponse.expiresOnTimestamp - 5 * 60 * 1000 // refresh 5 min early
     };
     return cachedToken.token;
 }
+
+// Pre-warm: fetch token at startup so the first request doesn't wait
+getCognitiveServicesToken().catch(() => { /* swallow — will retry on first request */ });
 
 // CORS helpers (same pattern as vision-proxy)
 export function corsHeaders(): Record<string, string> {

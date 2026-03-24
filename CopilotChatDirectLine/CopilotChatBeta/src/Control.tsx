@@ -36,6 +36,7 @@ export interface ControlProps {
     DefaultLanguage?: PropertyValue<string>;
     EnableDebugLog?: PropertyValue<boolean>;
     DebugLogEmail?: PropertyValue<string>;
+    ControlVersion?: PropertyValue<string>;
 }
 
 const ChatDirectLineControl: React.FC<ControlProps> = (props) => {

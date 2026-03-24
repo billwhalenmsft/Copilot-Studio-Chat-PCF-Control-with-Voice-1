@@ -8,7 +8,7 @@
       <LocalizedName description="Copilot Studio Chat PCF Control" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>2.0.6</Version>
+    <Version>2.0.9</Version>
     <!-- Solution Package Type: Unmanaged(0)/Managed(1)/Both(2)-->
     <Managed>0</Managed>
     <Publisher>

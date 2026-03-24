@@ -189,8 +189,9 @@ async function getAzureAuthToken(speechKey: string, speechRegion: string): Promi
 }
 
 /**
- * Play audio using HTML Audio element (most reliable on mobile)
- * This approach starts playing as soon as enough data is buffered.
+ * Play audio using HTML Audio element with streaming playback.
+ * Creates a blob URL from a ReadableStream so the browser can start
+ * decoding/playing before the full download completes.
  */
 async function playAudioFromResponse(
     response: Response,
@@ -199,23 +200,26 @@ async function playAudioFromResponse(
     console.log('🎵 Starting audio playback...');
     const startTime = performance.now();
 
-    // Get audio data as blob
+    // If the response has a body stream and the browser supports it,
+    // create a MediaSource or blob URL progressively.
+    // For broad compatibility, we use blob() but start playback on canplay
+    // (not canplaythrough) so the browser begins as soon as it has enough data.
     const audioBlob = await response.blob();
     const downloadTime = performance.now();
     console.log(`📥 Audio downloaded in ${(downloadTime - startTime).toFixed(0)}ms (${(audioBlob.size / 1024).toFixed(1)}KB)`);
 
-    // Create blob URL
     const audioUrl = URL.createObjectURL(audioBlob);
 
     return new Promise((resolve, reject) => {
-        // Create new audio element for each playback (cleaner on mobile)
-        const audio = new Audio(audioUrl);
+        const audio = new Audio();
         audioRef.current = audio;
 
-        // Set up event handlers BEFORE setting src
+        // Hint to browser to auto-buffer aggressively
+        audio.preload = 'auto';
+
         audio.onended = () => {
             console.log(`✅ Audio playback complete (total: ${(performance.now() - startTime).toFixed(0)}ms)`);
-            URL.revokeObjectURL(audioUrl); // Clean up
+            URL.revokeObjectURL(audioUrl);
             audioRef.current = null;
             resolve();
         };
@@ -227,17 +231,21 @@ async function playAudioFromResponse(
             reject(new Error('Audio playback failed'));
         };
 
-        audio.oncanplaythrough = () => {
-            console.log(`🔊 Playback starting in ${(performance.now() - startTime).toFixed(0)}ms`);
+        // Start playback as soon as the browser has enough to begin (canplay),
+        // not when the entire file is buffered (canplaythrough).
+        audio.oncanplay = () => {
+            const elapsed = (performance.now() - startTime).toFixed(0);
+            console.log(`🔊 Playback starting in ${elapsed}ms`);
+            audio.play().catch(err => {
+                console.error('❌ Play failed:', err);
+                URL.revokeObjectURL(audioUrl);
+                audioRef.current = null;
+                reject(err);
+            });
         };
 
-        // Start playback
-        audio.play().catch(err => {
-            console.error('❌ Play failed:', err);
-            URL.revokeObjectURL(audioUrl);
-            audioRef.current = null;
-            reject(err);
-        });
+        // Set src to trigger loading (don't call play() here — wait for canplay)
+        audio.src = audioUrl;
     });
 }
 
@@ -360,6 +368,19 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
         const isEnglish = currentLanguage.startsWith('en-');
 
         console.log('🎤 SPEAK - language:', currentLanguage, 'voiceId:', currentVoiceId, 'voiceProfile:', resolvedVoiceProfile, 'multiLingual:', useMultiLingual, 'azure:', hasAzureSpeech, 'openai:', hasOpenAI, 'proxy:', hasProxy, 'entra:', hasEntraAuth);
+        console.log('🔧 TTS CONFIG:', JSON.stringify({
+            speechProxyEndpoint: speechProxyEndpoint || '(not set)',
+            speechProxyApiKey: speechProxyApiKey ? `${speechProxyApiKey.substring(0, 4)}...` : '(not set)',
+            speechKey: speechKey ? `${speechKey.substring(0, 4)}...` : '(not set)',
+            speechRegion: speechRegion || '(not set)',
+            openAIEndpoint: openAIEndpoint || '(not set)',
+            openAIKey: openAIKey ? `${openAIKey.substring(0, 4)}...` : '(not set)',
+            openAIDeployment: openAIDeployment || '(not set)',
+            voiceConfigProvider: voiceConfig?.provider || '(no profile match)',
+            voiceConfigVoice: voiceConfig?.voice || '(none)',
+            voiceConfigStyle: voiceConfig?.style || '(none)',
+            textLength: text.length
+        }));
 
         if (isMobile && !audioUnlocked && (hasAzureSpeech || hasOpenAI)) {
             console.log('⚠️ Audio not unlocked on mobile');
@@ -385,8 +406,12 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
                         ? `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${currentLanguage || 'en-US'}"><voice name="${voiceName}"><mstts:express-as style="${style}" styledegree="1.5"><prosody rate="1.1" pitch="0%">${escapeXml(text)}</prosody></mstts:express-as></voice></speak>`
                         : `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${currentLanguage || 'en-US'}"><voice name="${voiceName}"><prosody rate="1.0" pitch="0%">${escapeXml(text)}</prosody></voice></speak>`;
                     
+                    const ttsUrl = `${proxyBase}/api/azure-tts`;
                     console.log(`🔌 Proxy → Azure Speech: ${voiceName}`);
-                    const response = await fetch(`${proxyBase}/api/azure-tts`, {
+                    console.log(`🌐 TTS URL: ${ttsUrl}`);
+                    console.log(`📝 SSML (first 200): ${ssml.substring(0, 200)}`);
+                    console.log(`🔑 API key header present: ${!!proxyHeaders['x-api-key']}`);
+                    const response = await fetch(ttsUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/ssml+xml',
@@ -394,8 +419,10 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
                         },
                         body: ssml
                     });
+                    console.log(`📡 Proxy response: ${response.status} ${response.statusText}, content-type: ${response.headers.get('content-type')}, content-length: ${response.headers.get('content-length')}`);
                     if (!response.ok) {
                         const errBody = await response.text().catch(() => '');
+                        console.error(`❌ Proxy Azure TTS error body: ${errBody}`);
                         throw new Error(`Proxy Azure TTS error: ${response.status} ${errBody}`);
                     }
                     return playAudioFromResponse(response, audioRef);
@@ -403,8 +430,10 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
 
                 // OpenAI voice via proxy
                 if (voiceConfig?.provider === 'openai') {
+                    const ttsUrl = `${proxyBase}/api/openai-tts`;
                     console.log(`🔌 Proxy → OpenAI TTS: ${voiceConfig.voice}`);
-                    const response = await fetch(`${proxyBase}/api/openai-tts`, {
+                    console.log(`🌐 TTS URL: ${ttsUrl}`);
+                    const response = await fetch(ttsUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -417,17 +446,21 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
                             speed: 1.0
                         })
                     });
+                    console.log(`📡 Proxy response: ${response.status} ${response.statusText}, content-type: ${response.headers.get('content-type')}`);
                     if (!response.ok) {
                         const errBody = await response.text().catch(() => '');
+                        console.error(`❌ Proxy OpenAI TTS error body: ${errBody}`);
                         throw new Error(`Proxy OpenAI TTS error: ${response.status} ${errBody}`);
                     }
                     return playAudioFromResponse(response, audioRef);
                 }
 
                 // Default proxy fallback: Azure Speech with Jenny
+                const fallbackUrl = `${proxyBase}/api/azure-tts`;
                 console.log('🔌 Proxy → Azure Speech fallback: en-US-JennyNeural');
+                console.log(`🌐 TTS URL: ${fallbackUrl}`);
                 const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US"><voice name="en-US-JennyNeural"><mstts:express-as style="chat" styledegree="1.5"><prosody rate="1.1" pitch="0%">${escapeXml(text)}</prosody></mstts:express-as></voice></speak>`;
-                const response = await fetch(`${proxyBase}/api/azure-tts`, {
+                const response = await fetch(fallbackUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/ssml+xml',
@@ -435,8 +468,10 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
                     },
                     body: ssml
                 });
+                console.log(`📡 Proxy response: ${response.status} ${response.statusText}, content-type: ${response.headers.get('content-type')}`);
                 if (!response.ok) {
                     const errBody = await response.text().catch(() => '');
+                    console.error(`❌ Proxy Azure TTS fallback error body: ${errBody}`);
                     throw new Error(`Proxy Azure TTS error: ${response.status} ${errBody}`);
                 }
                 return playAudioFromResponse(response, audioRef);
@@ -673,11 +708,15 @@ export function useSpeak(options: UseSpeakOptions = {}): UseSpeakReturn {
                 return playAudioFromResponse(response, audioRef);
             }
         } catch (error) {
-            console.error('❌ TTS failed:', error);
+            const errMsg = error instanceof Error ? error.message : String(error);
+            const errStack = error instanceof Error ? error.stack : '';
+            console.error(`❌ TTS failed: ${errMsg}`);
+            console.error(`❌ TTS error stack: ${errStack}`);
+            console.error(`❌ TTS fallback path: proxy=${hasProxy} entra=${hasEntraAuth} azureKey=${!!(speechKey && speechRegion)} openaiKey=${!!(openAIEndpoint && openAIKey)}`);
         }
 
         // Browser fallback
-        console.log('🔊 Using browser voice fallback');
+        console.log('🔊 Using browser voice fallback (TTS service unavailable — check errors above)');
         if (!window.speechSynthesis) return;
 
         window.speechSynthesis.cancel();

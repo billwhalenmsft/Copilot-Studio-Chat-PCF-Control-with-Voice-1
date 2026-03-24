@@ -94,7 +94,7 @@ export class CopilotStudioChatBeta {
      */
     getOutputs(): IOutputs {
         return {
-            Version: "1.3.5"
+            Version: "2.0.9"
         };
     }
 

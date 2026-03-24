@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="Copilot" constructor="CopilotStudioChatBeta" version="2.0.6" display-name-key="Copilot Studio Chat Beta" description-key="Beta Testing - Latest features including Driving Mode, Adaptive Cards, Voice (Azure + OpenAI), Attachments, Language Selection, and Admin Mode" control-type="standard" >
+  <control namespace="Copilot" constructor="CopilotStudioChatBeta" version="2.0.9" display-name-key="Copilot Studio Chat Beta" description-key="Beta Testing - Latest features including Driving Mode, Adaptive Cards, Voice (Azure + OpenAI), Attachments, Language Selection, and Admin Mode" control-type="standard" >
     <!--external-service-usage node declares whether this 3rd party PCF control is using external service or not, if yes, this control will be considered as premium and require corresponding license, Default is false -->
     <external-service-usage enabled="false" />
     
@@ -28,6 +28,9 @@
     
     <!-- Language Configuration -->
     <property name="DefaultLanguage" display-name-key="DefaultLanguage" description-key="Default language for speech recognition and synthesis (e.g., en-US, es-CO, es-MX, fr-FR). Leave empty for auto-detection from browser." of-type="SingleLine.Text" usage="input" required="false" default-value="" />
+    
+    <!-- Version (visible in properties panel) -->
+    <property name="ControlVersion" display-name-key="ControlVersion" description-key="Deployed control version (read-only)" of-type="SingleLine.Text" usage="input" required="false" default-value="2.0.8" />
     
     <!-- Output -->
     <property name="Version" display-name-key="Version" description-key="Control Version (read-only)" of-type="SingleLine.Text" usage="output" />

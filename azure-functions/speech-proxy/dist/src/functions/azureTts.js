@@ -64,16 +64,15 @@ async function azureTtsHandler(request, context) {
             context.error(`Azure Speech error (${response.status}): ${errorText}`);
             return (0, shared_1.jsonResponse)(502, { error: `Azure Speech returned ${response.status}: ${errorText}` });
         }
-        // Stream audio back to client
-        const audioBuffer = await response.arrayBuffer();
-        context.log(`Azure TTS complete (${(audioBuffer.byteLength / 1024).toFixed(1)}KB)`);
+        // Stream audio directly to client — no buffering
+        context.log("Azure TTS: streaming response to client");
         return {
             status: 200,
             headers: {
                 "Content-Type": "audio/mpeg",
                 ...(0, shared_1.corsHeaders)()
             },
-            body: Buffer.from(audioBuffer)
+            body: response.body
         };
     }
     catch (err) {

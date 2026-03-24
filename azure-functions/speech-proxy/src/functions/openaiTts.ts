@@ -95,17 +95,15 @@ async function openaiTtsHandler(request: HttpRequest, context: InvocationContext
             return jsonResponse(502, { error: `Azure OpenAI returned ${response.status}: ${errorText}` });
         }
 
-        // Stream audio back to client
-        const audioBuffer = await response.arrayBuffer();
-        context.log(`OpenAI TTS complete (${(audioBuffer.byteLength / 1024).toFixed(1)}KB)`);
-
+        // Stream audio directly to client — no buffering
+        context.log("OpenAI TTS: streaming response to client");
         return {
             status: 200,
             headers: {
                 "Content-Type": "audio/mpeg",
                 ...corsHeaders()
             },
-            body: Buffer.from(audioBuffer)
+            body: response.body as any
         };
     } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";

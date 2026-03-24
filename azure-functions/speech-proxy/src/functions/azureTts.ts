@@ -72,17 +72,15 @@ async function azureTtsHandler(request: HttpRequest, context: InvocationContext)
             return jsonResponse(502, { error: `Azure Speech returned ${response.status}: ${errorText}` });
         }
 
-        // Stream audio back to client
-        const audioBuffer = await response.arrayBuffer();
-        context.log(`Azure TTS complete (${(audioBuffer.byteLength / 1024).toFixed(1)}KB)`);
-
+        // Stream audio directly to client — no buffering
+        context.log("Azure TTS: streaming response to client");
         return {
             status: 200,
             headers: {
                 "Content-Type": "audio/mpeg",
                 ...corsHeaders()
             },
-            body: Buffer.from(audioBuffer)
+            body: response.body as any
         };
     } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";

@@ -1,6 +1,6 @@
 ﻿/**
  * CopilotChatGA - PCF Standard Control Entry Point
- * Stable v1.3.1 release
+ * GA v2.0.0 release
  */
 
 import Control, { ControlProps } from './src/Control';
@@ -94,7 +94,7 @@ export class CopilotStudioChatGA {
      */
     getOutputs(): IOutputs {
         return {
-            Version: "1.4.0"
+            Version: "2.0.0"
         };
     }
 
