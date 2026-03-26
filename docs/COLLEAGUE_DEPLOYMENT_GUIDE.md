@@ -98,7 +98,7 @@ openssl rand -hex 16
 
 ### 1.2 Deploy to Azure
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fbillwhalenmsft%2FCopilot-Studio-Chat-PCF-Control-with-Voice-1%2Fpre-entra-v1.3.5%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fbillwhalenmsft%2FCopilot-Studio-Chat-PCF-Control-with-Voice-1%2Fmain%2Fazuredeploy.json)
 
 Fill in the deployment form:
 
@@ -187,7 +187,7 @@ Run these commands one at a time in Cloud Shell. Replace `<functionAppName>` and
 ```bash
 # 1. Clone the repository (one-time)
 git clone https://github.com/billwhalenmsft/Copilot-Studio-Chat-PCF-Control-with-Voice-1.git \
-  --branch pre-entra-v1.3.5 --single-branch --depth 1
+  --depth 1
 
 # 2. Navigate to the speech proxy folder
 cd Copilot-Studio-Chat-PCF-Control-with-Voice-1/azure-functions/speech-proxy
