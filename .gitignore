@@ -443,3 +443,5 @@ deploy-package-temp2/
 scripts/importjob_*.xml
 TokenExchangeFunction/deploy-speech.zip
 azure-functions/speech-proxy/deploy.zip
+
+scripts/
